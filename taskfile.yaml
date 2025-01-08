@@ -1,0 +1,18 @@
+version: "3"
+
+env:
+  # Platform specific DSN (since it's file-based and this project uses XDG).
+  # Note: This DSN also differs for different commands due to how Atlas and 
+  # Jet handle it differently. See relevant tasks for an example value.
+  DSN: ""
+
+tasks:
+  codegen:
+    cmds:
+      # Example DSN for mac: DSN="file://$HOME/.local/share/flower/sqlite.db"
+      - jet -source=sqlite -dsn=$DSN -path=./gen
+
+  migrate:
+    cmds:
+      # Example DSN for mac: DSN="sqlite://$HOME/.local/share/flower/sqlite.db"
+      - atlas schema apply -u $DSN --to file://schema.hcl
