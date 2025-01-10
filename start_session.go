@@ -62,7 +62,7 @@ func (c *StartSessionCmd) Run(deps *GlobalDependencies) error {
 }
 
 func (c *StartSessionCmd) checkForOpenSessions(ctx context.Context, repo *data.Respository) error {
-	sessions, err := repo.GetOpenSessions(ctx)
+	sessions, err := repo.ListOpenSessions(ctx)
 	if err != nil {
 		return fmt.Errorf("retrieving open sessions: %w", err)
 	}

@@ -97,7 +97,7 @@ func (c *RemoveTaskCmd) Run(deps *GlobalDependencies) error {
 }
 
 type ListTasksCmd struct {
-	AsJSON bool `name:"json" help:"marshal the list as JSON"`
+	AsJSON bool `name:"json" help:"Display the list as JSON."`
 }
 
 func (c *ListTasksCmd) Run(deps *GlobalDependencies) error {

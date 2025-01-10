@@ -7,15 +7,16 @@ import (
 
 	"github.com/Broderick-Westrope/flower/gen/model"
 	"github.com/Broderick-Westrope/flower/gen/table"
+	"github.com/Broderick-Westrope/flower/internal"
 
 	"github.com/go-jet/jet/v2/sqlite"
 )
 
 type Session struct {
-	ID        int
-	Task      *Task
-	StartedAt time.Time
-	EndedAt   time.Time
+	ID        int        `json:"id"`
+	Task      *Task      `json:"task"`
+	StartedAt time.Time  `json:"started_at"`
+	EndedAt   *time.Time `json:"ended_at"`
 }
 
 func (repo *Respository) sessionFromDataModel(ctx context.Context, session *model.Sessions) (*Session, error) {
@@ -24,11 +25,16 @@ func (repo *Respository) sessionFromDataModel(ctx context.Context, session *mode
 		return nil, fmt.Errorf("retrieving task %d associated with session %d: %w", session.TaskID, session.ID, err)
 	}
 
+	var endedAt *time.Time
+	if session.EndedAt != 0 {
+		endedAt = internal.ToPointer(time.Unix(int64(session.EndedAt), 0))
+	}
+
 	return &Session{
 		ID:        int(session.ID),
 		Task:      task,
 		StartedAt: time.Unix(int64(session.StartedAt), 0),
-		EndedAt:   time.Unix(int64(session.EndedAt), 0),
+		EndedAt:   endedAt,
 	}, nil
 }
 
@@ -91,12 +97,55 @@ func (repo *Respository) StopSession(ctx context.Context, id int) (*Session, err
 	return result, err
 }
 
-func (repo *Respository) GetOpenSessions(ctx context.Context) ([]Session, error) {
+func (repo *Respository) ListOpenSessions(ctx context.Context) ([]Session, error) {
 	sessions := make([]model.Sessions, 0)
 
 	err := table.Sessions.
-		SELECT(table.Sessions.AllColumns, table.Sessions.TaskID).
+		SELECT(table.Sessions.AllColumns).
 		WHERE(table.Sessions.EndedAt.EQ(sqlite.Int(0))).
+		ORDER_BY(table.Sessions.StartedAt.ASC()).
+		QueryContext(ctx, repo.db, &sessions)
+	if err != nil {
+		if isNotFoundError(err) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+
+	result, err := repo.sessionSliceFromDataModelSlice(ctx, sessions)
+	if err != nil {
+		return nil, err
+	}
+	return result, err
+}
+
+func (repo *Respository) ListClosedSessions(ctx context.Context) ([]Session, error) {
+	sessions := make([]model.Sessions, 0)
+
+	err := table.Sessions.
+		SELECT(table.Sessions.AllColumns).
+		WHERE(table.Sessions.EndedAt.NOT_EQ(sqlite.Int(0))).
+		ORDER_BY(table.Sessions.StartedAt.ASC()).
+		QueryContext(ctx, repo.db, &sessions)
+	if err != nil {
+		if isNotFoundError(err) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+
+	result, err := repo.sessionSliceFromDataModelSlice(ctx, sessions)
+	if err != nil {
+		return nil, err
+	}
+	return result, err
+}
+
+func (repo *Respository) ListSessions(ctx context.Context) ([]Session, error) {
+	sessions := make([]model.Sessions, 0)
+
+	err := table.Sessions.
+		SELECT(table.Sessions.AllColumns).
 		ORDER_BY(table.Sessions.StartedAt.ASC()).
 		QueryContext(ctx, repo.db, &sessions)
 	if err != nil {

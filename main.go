@@ -19,6 +19,7 @@ type CLI struct {
 	Root  RootCmd         `cmd:"" name:"tui" default:"1" help:"Interactive Terminal-UI."`
 	Start StartSessionCmd `cmd:"" help:"Start a new session."`
 	Stop  StopSessionCmd  `cmd:"" help:"Stop the open sessions."`
+	List  ListSessionsCmd `cmd:"" help:"List information about all sessions."`
 
 	Task struct {
 		Add    AddTaskCmd    `cmd:"" help:"Add a new task."`
@@ -27,7 +28,7 @@ type CLI struct {
 		Remove RemoveTaskCmd `cmd:"" aliases:"rm" help:"Remove a task and associated sessions. (destructive)"`
 		Clear  ClearTasksCmd `cmd:"" help:"Remove all tasks and associated sessions. (destructive)"`
 		// TODO(feat): archive/activate, info/stats (for specific task)
-	} `cmd:"" help:"subcommands for managing tasks"`
+	} `cmd:""`
 }
 
 type GlobalDependencies struct {
@@ -96,17 +97,4 @@ type RootCmd struct{}
 
 func (c *RootCmd) Run(deps *GlobalDependencies) error {
 	panic(errors.New("unimplemented: TUI"))
-}
-
-func areMutuallyExclusive(bools ...bool) bool {
-	count := 0
-	for _, b := range bools {
-		if b {
-			count++
-		}
-		if count > 1 {
-			return false
-		}
-	}
-	return count <= 1
 }

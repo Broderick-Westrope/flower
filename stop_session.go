@@ -2,11 +2,10 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"strings"
 	"time"
 
+	"github.com/Broderick-Westrope/flower/internal"
 	"github.com/Broderick-Westrope/flower/internal/data"
 	"github.com/charmbracelet/huh"
 	"github.com/fatih/color"
@@ -22,22 +21,21 @@ type StopSessionCmd struct {
 func (c *StopSessionCmd) Run(deps *GlobalDependencies) error {
 	ctx := context.Background()
 
-	if !areMutuallyExclusive(c.Latest, c.All, len(c.TaskIDs) > 0) {
-		sb := strings.Builder{}
-		sb.WriteString("You have provided the following mutually exclusive values. Please provide only one:\n")
+	if !internal.AreMutuallyExclusive(c.Latest, c.All, len(c.TaskIDs) > 0) {
+		fmt.Println(color.RedString("You have provided the following mutually exclusive flags. Please provide only one:"))
 		if c.Latest {
-			sb.WriteString(fmt.Sprintln(" - latest"))
+			fmt.Println(color.RedString(" - latest"))
 		}
 		if c.All {
-			sb.WriteString(fmt.Sprintln(" - all"))
+			fmt.Println(color.RedString(" - all"))
 		}
 		if len(c.TaskIDs) > 0 {
-			sb.WriteString(fmt.Sprintln(" - task-ids"))
+			fmt.Println(color.RedString(" - task-ids"))
 		}
-		return errors.New(sb.String())
+		return nil
 	}
 
-	sessions, err := deps.Repo.GetOpenSessions(ctx)
+	sessions, err := deps.Repo.ListOpenSessions(ctx)
 	if err != nil {
 		return fmt.Errorf("retrieving open sessions: %w", err)
 	}
@@ -83,8 +81,8 @@ func (c *StopSessionCmd) stopLatestOpenSession(ctx context.Context, repo *data.R
 		return err
 	}
 	fmt.Printf(color.GreenString(
-		"Latest session stopped. The suggested break is %s.\n"),
-		calculateBreak(session.EndedAt.Sub(session.StartedAt)).String(),
+		"Latest session stopped. The suggested break is %d minutes.\n"),
+		int(calculateBreak(session.EndedAt.Sub(session.StartedAt)).Minutes()),
 	)
 	return nil
 }
@@ -157,7 +155,7 @@ func (c *StopSessionCmd) stopOpenSessionsInteractively(ctx context.Context, repo
 		closeIt := false
 		err := huh.NewConfirm().Value(&closeIt).
 			Description(fmt.Sprintf("Task: %q, Duration: %s",
-				session.Task.Name, time.Since(session.EndedAt).String())).
+				session.Task.Name, time.Since(session.StartedAt).String())).
 			Description("").
 			Run()
 		if err != nil {
@@ -190,7 +188,7 @@ func stopSessionsAndAnnounce(ctx context.Context, repo *data.Respository, sessio
 	)
 	if len(sessions) == 1 {
 		msg = fmt.Sprintf(
-			"1 session was stopped. The suggested break is %s.", totalBreak.String(),
+			"1 session was stopped. The suggested break is %d minutes.", int(totalBreak.Minutes()),
 		)
 	}
 	fmt.Println(color.GreenString(msg))
@@ -231,7 +229,7 @@ func promptToStopOpenSessions(ctx context.Context, repo *data.Respository, sessi
 		stop = false
 		err = huh.NewConfirm().Value(&stop).
 			Title("Would you like to stop this session?").
-			Description(fmt.Sprintf("Task: %q, Duration: %s", s.Task.Name, time.Since(s.EndedAt).String())).
+			Description(fmt.Sprintf("Task: %q, Duration: %s", s.Task.Name, time.Since(s.StartedAt).String())).
 			Run()
 		if err != nil {
 			return err
@@ -251,12 +249,12 @@ func promptToStopOpenSessions(ctx context.Context, repo *data.Respository, sessi
 	fmt.Printf("Stopped %d out of %d sessions.\n", stoppedCount, len(sessions))
 
 	msg := fmt.Sprintf(
-		"Stopped %d out of %d sessions. The total break is %s.",
-		stoppedCount, len(sessions), totalBreak.String(),
+		"Stopped %d out of %d sessions. The total break is %d minutes.",
+		stoppedCount, len(sessions), int(totalBreak.Minutes()),
 	)
 	if len(sessions) == 1 {
 		msg = fmt.Sprintf(
-			"Stopped 1 session. The suggested break is %s.", totalBreak.String(),
+			"Stopped 1 session. The suggested break is %d minutes.", int(totalBreak.Minutes()),
 		)
 	}
 	fmt.Println(color.GreenString(msg))
