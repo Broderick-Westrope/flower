@@ -19,7 +19,7 @@ type Session struct {
 	EndedAt   *time.Time `json:"ended_at"`
 }
 
-func (repo *Respository) sessionFromDataModel(ctx context.Context, session *model.Sessions) (*Session, error) {
+func (repo *Repository) sessionFromDataModel(ctx context.Context, session *model.Sessions) (*Session, error) {
 	task, err := repo.GetTask(ctx, int(session.TaskID))
 	if err != nil {
 		return nil, fmt.Errorf("retrieving task %d associated with session %d: %w", session.TaskID, session.ID, err)
@@ -38,7 +38,7 @@ func (repo *Respository) sessionFromDataModel(ctx context.Context, session *mode
 	}, nil
 }
 
-func (repo *Respository) sessionSliceFromDataModelSlice(ctx context.Context, sessions []model.Sessions) ([]Session, error) {
+func (repo *Repository) sessionSliceFromDataModelSlice(ctx context.Context, sessions []model.Sessions) ([]Session, error) {
 	out := make([]Session, 0)
 	for _, dmSession := range sessions {
 		newSession, err := repo.sessionFromDataModel(ctx, &dmSession)
@@ -50,7 +50,7 @@ func (repo *Respository) sessionSliceFromDataModelSlice(ctx context.Context, ses
 	return out, nil
 }
 
-func (repo *Respository) StartSession(ctx context.Context, taskID int) (*Session, error) {
+func (repo *Repository) StartSession(ctx context.Context, taskID int) (*Session, error) {
 	session := &model.Sessions{
 		ID:        0,
 		TaskID:    int32(taskID),
@@ -73,7 +73,7 @@ func (repo *Respository) StartSession(ctx context.Context, taskID int) (*Session
 	return result, err
 }
 
-func (repo *Respository) StopSession(ctx context.Context, id int) (*Session, error) {
+func (repo *Repository) StopSession(ctx context.Context, id int) (*Session, error) {
 	session := &model.Sessions{
 		EndedAt: int32(time.Now().Unix()),
 	}
@@ -97,7 +97,7 @@ func (repo *Respository) StopSession(ctx context.Context, id int) (*Session, err
 	return result, err
 }
 
-func (repo *Respository) ListOpenSessions(ctx context.Context) ([]Session, error) {
+func (repo *Repository) ListOpenSessions(ctx context.Context) ([]Session, error) {
 	sessions := make([]model.Sessions, 0)
 
 	err := table.Sessions.
@@ -119,7 +119,7 @@ func (repo *Respository) ListOpenSessions(ctx context.Context) ([]Session, error
 	return result, err
 }
 
-func (repo *Respository) ListClosedSessions(ctx context.Context) ([]Session, error) {
+func (repo *Repository) ListClosedSessions(ctx context.Context) ([]Session, error) {
 	sessions := make([]model.Sessions, 0)
 
 	err := table.Sessions.
@@ -141,7 +141,7 @@ func (repo *Respository) ListClosedSessions(ctx context.Context) ([]Session, err
 	return result, err
 }
 
-func (repo *Respository) ListSessions(ctx context.Context) ([]Session, error) {
+func (repo *Repository) ListSessions(ctx context.Context) ([]Session, error) {
 	sessions := make([]model.Sessions, 0)
 
 	err := table.Sessions.

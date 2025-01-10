@@ -14,9 +14,19 @@ table "tasks" {
     type = text
     null = false
   }
+  column "parent_id" {
+    type = integer
+    null = true
+  }
 
   primary_key {
     columns = [column.id]
+  }
+  foreign_key "fk_tasks_parent" {
+    columns     = [column.parent_id]
+    ref_columns = [column.id]
+    on_delete   = CASCADE
+    on_update   = CASCADE
   }
 }
 
@@ -45,7 +55,7 @@ table "sessions" {
   foreign_key "fk_tasks_sessions" {
     columns     = [column.task_id]
     ref_columns = [table.tasks.column.id]
-    on_delete   = "CASCADE"
-    on_update   = "CASCADE"
+    on_delete   = CASCADE
+    on_update   = CASCADE
   }
 }

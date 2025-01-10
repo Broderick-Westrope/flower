@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"strconv"
 	"strings"
 
 	"github.com/Broderick-Westrope/flower/internal/data"
@@ -15,8 +16,8 @@ import (
 )
 
 type GetTaskCmd struct {
-	TaskID int  `arg:"" help:"task ID"`
-	AsJSON bool `name:"json" help:"marshal the list as JSON"`
+	TaskID int  `arg:"" help:"Task ID."`
+	AsJSON bool `name:"json" help:"Display the list as JSON"`
 }
 
 func (c *GetTaskCmd) Run(deps *GlobalDependencies) error {
@@ -39,8 +40,9 @@ func (c *GetTaskCmd) Run(deps *GlobalDependencies) error {
 }
 
 type AddTaskCmd struct {
-	Name        string `help:"task name"`
-	Description string `aliases:"desc" help:"task description"`
+	Name        string `help:"Task name."`
+	Description string `aliases:"desc" help:"Task description."`
+	ParentID    string `name:"parent-id" help:"Task ID of the parent task."`
 
 	// This is used by other commands that want to interactively create a task.
 	taskID int
@@ -52,7 +54,7 @@ func (c *AddTaskCmd) Run(deps *GlobalDependencies) error {
 	var err error
 	if len(c.Name) == 0 {
 		fmt.Println("Creating a new task...")
-		task, err = promptForNewTask()
+		task, err = promptForNewTask(ctx, deps.Repo)
 		if err != nil {
 			return fmt.Errorf("prompting for new task: %w", err)
 		}
@@ -67,7 +69,7 @@ func (c *AddTaskCmd) Run(deps *GlobalDependencies) error {
 		return errors.New("task object was nil")
 	}
 
-	task, err = deps.Repo.CreateTask(ctx, task.Name, task.Description)
+	task, err = deps.Repo.CreateTask(ctx, task)
 	if err != nil {
 		return err
 	}
@@ -78,7 +80,7 @@ func (c *AddTaskCmd) Run(deps *GlobalDependencies) error {
 }
 
 type RemoveTaskCmd struct {
-	TaskID int  `arg:"" help:"ID of the task to remove"`
+	TaskID int  `arg:"" help:"ID of the task to remove."`
 	Force  bool `help:"Confirm deletion without prompting."`
 }
 
@@ -150,7 +152,7 @@ func (c *ClearTasksCmd) Run(deps *GlobalDependencies) error {
 	return nil
 }
 
-func promptForNewTask() (*data.Task, error) {
+func promptForNewTask(ctx context.Context, repo *data.Repository) (*data.Task, error) {
 	var taskNameSuggestions = []string{
 		"Write documentation",
 		"Weekly review",
@@ -204,6 +206,8 @@ func promptForNewTask() (*data.Task, error) {
 	}
 
 	var task data.Task
+	linkParent := false
+	parentIDStr := ""
 	err := huh.NewForm(
 		huh.NewGroup(
 			huh.NewInput().Value(&task.Name).
@@ -218,11 +222,49 @@ func promptForNewTask() (*data.Task, error) {
 			huh.NewInput().Value(&task.Description).
 				Title("Describe the task.").
 				Description("Leave blank to skip."),
+			huh.NewConfirm().Value(&linkParent).
+				Title("Would you like to link a parent task?").
+				Description("This allows you to create a logical heirachy of tasks."),
 		),
+		huh.NewGroup(
+			huh.NewInput().Value(&parentIDStr).
+				Title("What's the ID of the parent task?").
+				Validate(func(s string) error {
+					id, err := strconv.Atoi(s)
+					if err != nil {
+						return errors.New("Parent ID must be an integer.")
+					}
+					_, err = repo.GetTask(ctx, id)
+					if err != nil {
+						if errors.Is(err, data.ErrNotFound) {
+							return fmt.Errorf("No task with ID %d found.", id)
+						}
+						return errors.New("Failed to verify task exists, please try again.")
+					}
+					cyclic, err := repo.DetectParentTaskCycle(ctx, id)
+					if err != nil {
+						return errors.New("Failed to check cycles, please try again.")
+					}
+					if cyclic {
+						return errors.New("This would create a cyclic relationship between tasks.")
+					}
+					return nil
+				}),
+		).WithHideFunc(func() bool { return !linkParent }),
 	).Run()
 
 	if err != nil {
 		return nil, err
+	}
+
+	if linkParent && len(parentIDStr) > 0 {
+		parentID, err := strconv.Atoi(parentIDStr)
+		if err != nil {
+			return nil, err
+		}
+		task.Parent = &data.Task{
+			ID: parentID,
+		}
 	}
 	return &task, nil
 }

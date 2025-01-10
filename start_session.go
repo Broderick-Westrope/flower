@@ -61,7 +61,7 @@ func (c *StartSessionCmd) Run(deps *GlobalDependencies) error {
 	return nil
 }
 
-func (c *StartSessionCmd) checkForOpenSessions(ctx context.Context, repo *data.Respository) error {
+func (c *StartSessionCmd) checkForOpenSessions(ctx context.Context, repo *data.Repository) error {
 	sessions, err := repo.ListOpenSessions(ctx)
 	if err != nil {
 		return fmt.Errorf("retrieving open sessions: %w", err)
@@ -76,7 +76,7 @@ func (c *StartSessionCmd) checkForOpenSessions(ctx context.Context, repo *data.R
 			"There is still an open session. This should be stopped before starting a new session."),
 		)
 
-		stopNow := true
+		stopNow := false
 		err := huh.NewConfirm().Value(&stopNow).
 			Title("Would you like to stop it now?").
 			Run()

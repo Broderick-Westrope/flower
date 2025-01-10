@@ -60,7 +60,7 @@ func (c *StopSessionCmd) Run(deps *GlobalDependencies) error {
 	return c.stopOpenSessionsInteractively(ctx, deps.Repo, sessions)
 }
 
-func (c *StopSessionCmd) stopLatestOpenSession(ctx context.Context, repo *data.Respository, sessions []data.Session) error {
+func (c *StopSessionCmd) stopLatestOpenSession(ctx context.Context, repo *data.Repository, sessions []data.Session) error {
 	session := &sessions[0]
 	var err error
 
@@ -87,7 +87,7 @@ func (c *StopSessionCmd) stopLatestOpenSession(ctx context.Context, repo *data.R
 	return nil
 }
 
-func (c *StopSessionCmd) stopAllOpenSessions(ctx context.Context, repo *data.Respository, sessions []data.Session) error {
+func (c *StopSessionCmd) stopAllOpenSessions(ctx context.Context, repo *data.Repository, sessions []data.Session) error {
 	var err error
 	if !c.Force {
 		msg := fmt.Sprintf("Stop all %d open sessions?", len(sessions))
@@ -107,7 +107,7 @@ func (c *StopSessionCmd) stopAllOpenSessions(ctx context.Context, repo *data.Res
 	return stopSessionsAndAnnounce(ctx, repo, sessions)
 }
 
-func (c *StopSessionCmd) stopOpenSessionsAssociatedWithTaskIDs(ctx context.Context, repo *data.Respository, taskIDs []int, sessions []data.Session) error {
+func (c *StopSessionCmd) stopOpenSessionsAssociatedWithTaskIDs(ctx context.Context, repo *data.Repository, taskIDs []int, sessions []data.Session) error {
 	filteredSessions := make([]data.Session, 0, len(sessions))
 	var belongs bool
 	for _, session := range sessions {
@@ -148,7 +148,7 @@ func (c *StopSessionCmd) stopOpenSessionsAssociatedWithTaskIDs(ctx context.Conte
 	return stopSessionsAndAnnounce(ctx, repo, sessions)
 }
 
-func (c *StopSessionCmd) stopOpenSessionsInteractively(ctx context.Context, repo *data.Respository, sessions []data.Session) error {
+func (c *StopSessionCmd) stopOpenSessionsInteractively(ctx context.Context, repo *data.Repository, sessions []data.Session) error {
 	if len(sessions) == 1 {
 		session := sessions[0]
 		fmt.Println("Found 1 open session.")
@@ -172,7 +172,7 @@ func (c *StopSessionCmd) stopOpenSessionsInteractively(ctx context.Context, repo
 	return promptToStopOpenSessions(ctx, repo, sessions)
 }
 
-func stopSessionsAndAnnounce(ctx context.Context, repo *data.Respository, sessions []data.Session) error {
+func stopSessionsAndAnnounce(ctx context.Context, repo *data.Repository, sessions []data.Session) error {
 	var totalBreak time.Duration
 	for _, s := range sessions {
 		_, err := repo.StopSession(ctx, s.ID)
@@ -208,7 +208,7 @@ func calculateBreak(sessionDuration time.Duration) time.Duration {
 	}
 }
 
-func promptToStopOpenSessions(ctx context.Context, repo *data.Respository, sessions []data.Session) error {
+func promptToStopOpenSessions(ctx context.Context, repo *data.Repository, sessions []data.Session) error {
 	closeAll := true
 	err := huh.NewConfirm().Value(&closeAll).
 		Title("Would you like to stop all of the sessions?").

@@ -20,6 +20,7 @@ type tasksTable struct {
 	ID          sqlite.ColumnInteger
 	Name        sqlite.ColumnString
 	Description sqlite.ColumnString
+	ParentID    sqlite.ColumnInteger
 
 	AllColumns     sqlite.ColumnList
 	MutableColumns sqlite.ColumnList
@@ -63,8 +64,9 @@ func newTasksTableImpl(schemaName, tableName, alias string) tasksTable {
 		IDColumn          = sqlite.IntegerColumn("id")
 		NameColumn        = sqlite.StringColumn("name")
 		DescriptionColumn = sqlite.StringColumn("description")
-		allColumns        = sqlite.ColumnList{IDColumn, NameColumn, DescriptionColumn}
-		mutableColumns    = sqlite.ColumnList{NameColumn, DescriptionColumn}
+		ParentIDColumn    = sqlite.IntegerColumn("parent_id")
+		allColumns        = sqlite.ColumnList{IDColumn, NameColumn, DescriptionColumn, ParentIDColumn}
+		mutableColumns    = sqlite.ColumnList{NameColumn, DescriptionColumn, ParentIDColumn}
 	)
 
 	return tasksTable{
@@ -74,6 +76,7 @@ func newTasksTableImpl(schemaName, tableName, alias string) tasksTable {
 		ID:          IDColumn,
 		Name:        NameColumn,
 		Description: DescriptionColumn,
+		ParentID:    ParentIDColumn,
 
 		AllColumns:     allColumns,
 		MutableColumns: mutableColumns,

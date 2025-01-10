@@ -32,7 +32,7 @@ type CLI struct {
 }
 
 type GlobalDependencies struct {
-	Repo *data.Respository
+	Repo *data.Repository
 }
 
 func main() {

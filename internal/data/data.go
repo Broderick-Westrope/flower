@@ -6,12 +6,12 @@ import (
 	_ "github.com/go-jet/jet/v2/sqlite"
 )
 
-type Respository struct {
+type Repository struct {
 	db *sql.DB
 }
 
-func NewRepository(db *sql.DB) *Respository {
-	return &Respository{
+func NewRepository(db *sql.DB) *Repository {
+	return &Repository{
 		db: db,
 	}
 }

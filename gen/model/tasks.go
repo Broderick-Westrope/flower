@@ -11,4 +11,5 @@ type Tasks struct {
 	ID          int32 `sql:"primary_key"`
 	Name        string
 	Description string
+	ParentID    *int32
 }
