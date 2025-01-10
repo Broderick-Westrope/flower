@@ -87,5 +87,30 @@ func setupDatabase(dsn string) (*sql.DB, error) {
 		return nil, fmt.Errorf("pinging: %w", err)
 	}
 
+	_, err = db.Exec(`
+		-- Create "sessions" table
+		CREATE TABLE IF NOT EXISTS sessions (
+		  id integer NOT NULL,
+		  task_id integer NOT NULL,
+		  started_at integer NOT NULL,
+		  ended_at integer NOT NULL,
+		  PRIMARY KEY (id),
+		  CONSTRAINT fk_tasks_sessions FOREIGN KEY (task_id) REFERENCES tasks (id) ON UPDATE CASCADE ON DELETE CASCADE
+		);
+
+		-- Create "tasks" table
+		CREATE TABLE IF NOT EXISTS tasks (
+		  id integer NOT NULL,
+		  name text NOT NULL,
+		  description text NOT NULL,
+		  parent_id integer NULL,
+		  PRIMARY KEY (id),
+		  CONSTRAINT fk_tasks_parent FOREIGN KEY (parent_id) REFERENCES tasks (id) ON UPDATE CASCADE ON DELETE CASCADE
+		);
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("setting up schema: %w", err)
+	}
+
 	return db, nil
 }
