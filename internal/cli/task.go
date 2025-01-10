@@ -118,6 +118,11 @@ func (c *ListTasksCmd) Run(deps *GlobalDependencies) error {
 		return nil
 	}
 
+	if len(tasks) == 0 {
+		fmt.Println("No tasks found.")
+		return nil
+	}
+
 	for _, task := range tasks {
 		fmt.Println(stringifyTask(&task))
 	}
