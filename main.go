@@ -9,10 +9,12 @@ import (
 	"log"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/Broderick-Westrope/flower/gen/model"
 	"github.com/Broderick-Westrope/flower/internal/data"
+	"github.com/adrg/xdg"
 	"github.com/alecthomas/kong"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
@@ -45,18 +47,25 @@ func main() {
 		kong.UsageOnError(),
 	)
 
-	deps, deferFunc := setupGlobalDependencies()
+	deps, deferFunc, err := setupGlobalDependencies()
+	if err != nil {
+		log.Fatal(err)
+	}
 	defer deferFunc()
 
 	ctx.FatalIfErrorf(ctx.Run(deps))
 }
 
-func setupGlobalDependencies() (*GlobalDependencies, func()) {
-	dsn := os.Getenv("DSN")
+func setupGlobalDependencies() (*GlobalDependencies, func(), error) {
+	dataDir := filepath.Join(xdg.DataHome, "flower")
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		return nil, nil, fmt.Errorf("creating data directory: %w", err)
+	}
+
+	dsn := "file://" + filepath.Join(dataDir, "sqlite.db")
 	db, err := setupDatabase(dsn)
 	if err != nil {
-		log.Fatalf("failed to setup database: %v", err)
-		os.Exit(1)
+		return nil, nil, fmt.Errorf("failed to setup database: %w", err)
 	}
 
 	deps := &GlobalDependencies{
@@ -66,7 +75,7 @@ func setupGlobalDependencies() (*GlobalDependencies, func()) {
 	deferFunc := func() {
 		db.Close()
 	}
-	return deps, deferFunc
+	return deps, deferFunc, nil
 }
 
 func setupDatabase(dsn string) (*sql.DB, error) {
@@ -79,6 +88,19 @@ func setupDatabase(dsn string) (*sql.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("pinging: %w", err)
 	}
+
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS tasks (
+  			id integer NOT NULL,
+  			name text NOT NULL,
+  			description text NOT NULL,
+  			PRIMARY KEY (id)
+		);
+    `)
+	if err != nil {
+		return nil, fmt.Errorf("creating tasks table: %w", err)
+	}
+
 	return db, nil
 }
 
@@ -102,23 +124,47 @@ func (c *StopTimerCmd) Run(deps *GlobalDependencies) error {
 	panic(errors.New("unimplemented: stop timer for task"))
 }
 
-type AddTaskCmd struct{}
+type AddTaskCmd struct {
+	Name        string `help:"task name"`
+	Description string `aliases:"desc" help:"task description"`
+}
 
 func (c *AddTaskCmd) Run(deps *GlobalDependencies) error {
-	task, err := promptForNewTask()
-	if err != nil {
-		return err
+	var task *model.Tasks
+	var err error
+	if len(c.Name) == 0 {
+		fmt.Println("Creating a new task...")
+		task, err = promptForNewTask()
+		if err != nil {
+			if errors.Is(err, huh.ErrUserAborted) {
+				fmt.Println("Task creation canceled.")
+				return nil
+			}
+			return err
+		}
+	} else {
+		task = &model.Tasks{
+			Name:        c.Name,
+			Description: c.Description,
+		}
 	}
+
 	if task == nil {
-		return nil
+		return errors.New("task object was nil")
 	}
 
-	_, err = deps.Repo.CreateTask(context.Background(), task.Name, task.Description)
+	fmt.Println("Adding task...")
+	task, err = deps.Repo.CreateTask(context.Background(), task.Name, task.Description)
 	if err != nil {
 		return err
 	}
 
-	fmt.Println("Task added!")
+	fmt.Printf("New task added! 🎉\n\n%s\n",
+		lipgloss.JoinHorizontal(lipgloss.Top,
+			"  ",
+			stringifyTask(*task),
+		),
+	)
 	return nil
 }
 
@@ -214,41 +260,27 @@ func promptForNewTask() (*model.Tasks, error) {
 		"Quest for flow state",
 	}
 
-	fmt.Printf("\nAdding a new task...\n")
 	var task model.Tasks
+	err := huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().Value(&task.Name).
+				Title("What's the name of the task?").
+				Placeholder(taskNameSuggestions[rand.Intn(len(taskNameSuggestions))]).
+				Validate(func(s string) error {
+					if len(s) == 0 {
+						return errors.New("please enter a name")
+					}
+					return nil
+				}),
+			huh.NewInput().Value(&task.Description).
+				Title("Describe the task.").
+				Description("Leave blank to skip."),
+		),
+	).Run()
 
-	err := huh.NewInput().Value(&task.Name).
-		Title("What's the name of the task?").
-		Placeholder(taskNameSuggestions[rand.Intn(len(taskNameSuggestions))]).
-		Validate(func(s string) error {
-			if len(s) == 0 {
-				return errors.New("please enter a name")
-			}
-			return nil
-		}).
-		Run()
 	if err != nil {
-		if errors.Is(err, huh.ErrUserAborted) {
-			return nil, nil
-		}
 		return nil, err
 	}
-	fmt.Printf("Name: %s\n", task.Name)
-
-	err = huh.NewInput().Value(&task.Description).
-		Title("Describe the task.").
-		Description("Leave blank to skip.").
-		Run()
-	if err != nil {
-		if errors.Is(err, huh.ErrUserAborted) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	if len(task.Description) > 0 {
-		fmt.Printf("Description: %s\n", task.Description)
-	}
-
 	return &task, nil
 }
 

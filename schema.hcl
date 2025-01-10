@@ -18,9 +18,4 @@ table "tasks" {
   primary_key {
     columns = [column.id]
   }
-
-  index "tasks_name_idx" {
-    columns = [column.name]
-    unique  = false
-  }
 }
