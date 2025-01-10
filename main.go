@@ -27,7 +27,8 @@ type CLI struct {
 	Stop  StopTimerCmd  `cmd:""`
 
 	Task struct {
-		Add    AddTaskCmd    `cmd:"" default:"1"`
+		Get    GetTaskCmd    `cmd:""`
+		Add    AddTaskCmd    `cmd:""`
 		Remove RemoveTaskCmd `cmd:"" aliases:"rm"`
 		List   ListTasksCmd  `cmd:""`
 		Clear  ClearTasksCmd `cmd:""`
@@ -36,7 +37,7 @@ type CLI struct {
 }
 
 type GlobalDependencies struct {
-	Repo data.Respository
+	Repo *data.Respository
 }
 
 func main() {
@@ -124,6 +125,31 @@ func (c *StopTimerCmd) Run(deps *GlobalDependencies) error {
 	panic(errors.New("unimplemented: stop timer for task"))
 }
 
+type GetTaskCmd struct {
+	ID     int  `arg:"" help:"task"`
+	AsJSON bool `name:"json" help:"marshal the list as JSON"`
+}
+
+func (c *GetTaskCmd) Run(deps *GlobalDependencies) error {
+	task, err := deps.Repo.GetTask(context.Background(), int64(c.ID))
+	if err != nil {
+		return err
+	}
+
+	if c.AsJSON {
+		jsonBytes, err := json.MarshalIndent(task, "", "  ")
+		if err != nil {
+			return err
+		}
+		fmt.Printf("%s\n", jsonBytes)
+		return nil
+	}
+
+	fmt.Printf("\n%s\n", stringifyTask(task))
+	return nil
+
+}
+
 type AddTaskCmd struct {
 	Name        string `help:"task name"`
 	Description string `aliases:"desc" help:"task description"`
@@ -159,12 +185,7 @@ func (c *AddTaskCmd) Run(deps *GlobalDependencies) error {
 		return err
 	}
 
-	fmt.Printf("New task added! 🎉\n\n%s\n",
-		lipgloss.JoinHorizontal(lipgloss.Top,
-			"  ",
-			stringifyTask(*task),
-		),
-	)
+	fmt.Printf("New task added! 🎉\nID: %d\n", task.ID)
 	return nil
 }
 
@@ -204,7 +225,7 @@ func (c *ListTasksCmd) Run(deps *GlobalDependencies) error {
 	}
 
 	for _, task := range tasks {
-		fmt.Printf("%s\n", stringifyTask(task))
+		fmt.Println(stringifyTask(&task))
 	}
 	return nil
 }
@@ -258,6 +279,32 @@ func promptForNewTask() (*model.Tasks, error) {
 		"Knowledge mining",
 		"Mind gardening",
 		"Quest for flow state",
+		"Refactor spaghetti monster",
+		"Train AI to make tea",
+		"Conquer the laundry mountain",
+		"Reverse-engineer toaster intelligence",
+		"Pixel-perfect unicorn designs",
+		"Optimise sandwich algorithms",
+		"Deploy rocket-powered ducks",
+		"Master the art of WiFi summoning",
+		"Paint happy little bugs",
+		"Solve Rubik's cube of life",
+		"Document the dark matter API",
+		"Assemble IKEA time machine",
+		"Fix time-travel paradoxes",
+		"Write documentation in haiku",
+		"Brew potion of productivity",
+		"Unlock the secrets of YAML",
+		"Build empathy-driven robots",
+		"Complete 10,000-hour procrastination course",
+		"Outsource chores to squirrels",
+		"Encrypt the secret of happiness",
+		"Launch the procrastination-free startup",
+		"Train dog to debug pipelines",
+		"Publish manifesto on snack-driven development",
+		"Overclock the office coffee machine",
+		"Host team-building dragon hunt",
+		"Invent wireless hugs",
 	}
 
 	var task model.Tasks
@@ -284,7 +331,7 @@ func promptForNewTask() (*model.Tasks, error) {
 	return &task, nil
 }
 
-func stringifyTask(task model.Tasks) string {
+func stringifyTask(task *model.Tasks) string {
 	sb := strings.Builder{}
 	sb.WriteString(fmt.Sprintf("Name: %s\n", task.Name))
 

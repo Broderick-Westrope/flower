@@ -8,7 +8,7 @@ import (
 	"github.com/go-jet/jet/v2/sqlite"
 )
 
-func (repo *repository_Impl) CreateTask(ctx context.Context, name string, description string) (*model.Tasks, error) {
+func (repo *Respository) CreateTask(ctx context.Context, name string, description string) (*model.Tasks, error) {
 	task := &model.Tasks{
 		ID:          0,
 		Name:        name,
@@ -26,7 +26,21 @@ func (repo *repository_Impl) CreateTask(ctx context.Context, name string, descri
 	return task, err
 }
 
-func (repo *repository_Impl) ListTasks(ctx context.Context) ([]model.Tasks, error) {
+func (repo *Respository) GetTask(ctx context.Context, id int64) (*model.Tasks, error) {
+	tasks := new(model.Tasks)
+
+	err := table.Tasks.
+		SELECT(table.Tasks.AllColumns).
+		WHERE(table.Tasks.ID.EQ(sqlite.Int(id))).
+		QueryContext(ctx, repo.DB, tasks)
+	if err != nil {
+		return nil, err
+	}
+	return tasks, err
+
+}
+
+func (repo *Respository) ListTasks(ctx context.Context) ([]model.Tasks, error) {
 	var tasks []model.Tasks
 
 	err := table.Tasks.
@@ -36,10 +50,9 @@ func (repo *repository_Impl) ListTasks(ctx context.Context) ([]model.Tasks, erro
 		return nil, err
 	}
 	return tasks, err
-
 }
 
-func (repo *repository_Impl) DeleteTask(ctx context.Context, id int) error {
+func (repo *Respository) DeleteTask(ctx context.Context, id int) error {
 	_, err := table.Tasks.
 		DELETE().
 		WHERE(table.Tasks.ID.EQ(sqlite.Int(int64(id)))).
@@ -53,7 +66,7 @@ func (repo *repository_Impl) DeleteTask(ctx context.Context, id int) error {
 	return nil
 }
 
-func (repo *repository_Impl) DeleteAllTasks(ctx context.Context) error {
+func (repo *Respository) DeleteAllTasks(ctx context.Context) error {
 	_, err := table.Tasks.
 		DELETE().
 		WHERE(sqlite.Bool(true)).
