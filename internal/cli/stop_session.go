@@ -15,7 +15,7 @@ type StopSessionCmd struct {
 	Latest  bool  `help:"Stop the latest open session."`
 	All     bool  `help:"Stop all open sessions."`
 	TaskIDs []int `name:"task-ids" help:"Stop all sessions associated with the given task IDs."`
-	Force   bool  `help:"Performs the operation without confirming. This must be paired with one of the other flags."`
+	Skip    bool  `help:"Performs the operation without confirming. This must be paired with one of the other flags."`
 }
 
 func (c *StopSessionCmd) Run(deps *GlobalDependencies) error {
@@ -64,7 +64,7 @@ func (c *StopSessionCmd) stopLatestOpenSession(ctx context.Context, repo *data.R
 	session := &sessions[0]
 	var err error
 
-	if !c.Force {
+	if !c.Skip {
 		stopSessions := true
 		err = huh.NewConfirm().Value(&stopSessions).
 			Title("Stop the latest session?").
@@ -89,7 +89,7 @@ func (c *StopSessionCmd) stopLatestOpenSession(ctx context.Context, repo *data.R
 
 func (c *StopSessionCmd) stopAllOpenSessions(ctx context.Context, repo *data.Repository, sessions []data.Session) error {
 	var err error
-	if !c.Force {
+	if !c.Skip {
 		msg := fmt.Sprintf("Stop all %d open sessions?", len(sessions))
 		if len(sessions) == 1 {
 			msg = "Stop the one open session?"
@@ -130,7 +130,7 @@ func (c *StopSessionCmd) stopOpenSessionsAssociatedWithTaskIDs(ctx context.Conte
 	}
 
 	var err error
-	if !c.Force {
+	if !c.Skip {
 		msg := fmt.Sprintf("Stop %d open sessions?", len(sessions))
 		if len(sessions) == 1 {
 			msg = "Stop the one open session?"
