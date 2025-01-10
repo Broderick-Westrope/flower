@@ -9,8 +9,7 @@
             "program": "${workspaceFolder}",
             "console": "integratedTerminal",
             "args": [
-                "task",
-                "add",
+                "start",
             ],
         }
     ]

@@ -1,39 +1,33 @@
 package main
 
 import (
-	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
-	"math/rand"
 	"os"
 	"path/filepath"
-	"strings"
 
-	"github.com/Broderick-Westrope/flower/gen/model"
 	"github.com/Broderick-Westrope/flower/internal/data"
 	"github.com/adrg/xdg"
 	"github.com/alecthomas/kong"
 	"github.com/charmbracelet/huh"
-	"github.com/charmbracelet/lipgloss"
 	_ "github.com/mattn/go-sqlite3"
 )
 
 type CLI struct {
-	Root  RootCmd       `cmd:"" default:"1" hidden:""`
-	Start StartTimerCmd `cmd:""`
-	Stop  StopTimerCmd  `cmd:""`
+	Root  RootCmd         `cmd:"" name:"tui" default:"1" help:"Interactive Terminal-UI."`
+	Start StartSessionCmd `cmd:"" help:"Start a new session."`
+	Stop  StopSessionCmd  `cmd:"" help:"Stop the open sessions."`
 
 	Task struct {
-		Get    GetTaskCmd    `cmd:""`
-		Add    AddTaskCmd    `cmd:""`
-		Remove RemoveTaskCmd `cmd:"" aliases:"rm"`
-		List   ListTasksCmd  `cmd:""`
-		Clear  ClearTasksCmd `cmd:""`
+		Add    AddTaskCmd    `cmd:"" help:"Add a new task."`
+		Get    GetTaskCmd    `cmd:"" help:"Get information about a task."`
+		List   ListTasksCmd  `cmd:"" help:"List information about all tasks."`
+		Remove RemoveTaskCmd `cmd:"" aliases:"rm" help:"Remove a task and associated sessions. (destructive)"`
+		Clear  ClearTasksCmd `cmd:"" help:"Remove all tasks and associated sessions. (destructive)"`
 		// TODO(feat): archive/activate, info/stats (for specific task)
-	} `cmd:""`
+	} `cmd:"" help:"subcommands for managing tasks"`
 }
 
 type GlobalDependencies struct {
@@ -54,7 +48,12 @@ func main() {
 	}
 	defer deferFunc()
 
-	ctx.FatalIfErrorf(ctx.Run(deps))
+	err = ctx.Run(deps)
+	if errors.Is(err, huh.ErrUserAborted) {
+		fmt.Println("User canceled.")
+		return
+	}
+	ctx.FatalIfErrorf(err)
 }
 
 func setupGlobalDependencies() (*GlobalDependencies, func(), error) {
@@ -63,10 +62,10 @@ func setupGlobalDependencies() (*GlobalDependencies, func(), error) {
 		return nil, nil, fmt.Errorf("creating data directory: %w", err)
 	}
 
-	dsn := "file://" + filepath.Join(dataDir, "sqlite.db")
+	dsn := "file://" + filepath.Join(dataDir, "sqlite.db?_fk=1")
 	db, err := setupDatabase(dsn)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to setup database: %w", err)
+		return nil, nil, fmt.Errorf("setting up database: %w", err)
 	}
 
 	deps := &GlobalDependencies{
@@ -90,22 +89,8 @@ func setupDatabase(dsn string) (*sql.DB, error) {
 		return nil, fmt.Errorf("pinging: %w", err)
 	}
 
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS tasks (
-  			id integer NOT NULL,
-  			name text NOT NULL,
-  			description text NOT NULL,
-  			PRIMARY KEY (id)
-		);
-    `)
-	if err != nil {
-		return nil, fmt.Errorf("creating tasks table: %w", err)
-	}
-
 	return db, nil
 }
-
-// Subcommands ---------------------------------------------------
 
 type RootCmd struct{}
 
@@ -113,234 +98,15 @@ func (c *RootCmd) Run(deps *GlobalDependencies) error {
 	panic(errors.New("unimplemented: TUI"))
 }
 
-type StartTimerCmd struct{}
-
-func (c *StartTimerCmd) Run(deps *GlobalDependencies) error {
-	panic(errors.New("unimplemented: start timer for task"))
-}
-
-type StopTimerCmd struct{}
-
-func (c *StopTimerCmd) Run(deps *GlobalDependencies) error {
-	panic(errors.New("unimplemented: stop timer for task"))
-}
-
-type GetTaskCmd struct {
-	ID     int  `arg:"" help:"task"`
-	AsJSON bool `name:"json" help:"marshal the list as JSON"`
-}
-
-func (c *GetTaskCmd) Run(deps *GlobalDependencies) error {
-	task, err := deps.Repo.GetTask(context.Background(), int64(c.ID))
-	if err != nil {
-		return err
-	}
-
-	if c.AsJSON {
-		jsonBytes, err := json.MarshalIndent(task, "", "  ")
-		if err != nil {
-			return err
+func areMutuallyExclusive(bools ...bool) bool {
+	count := 0
+	for _, b := range bools {
+		if b {
+			count++
 		}
-		fmt.Printf("%s\n", jsonBytes)
-		return nil
-	}
-
-	fmt.Printf("\n%s\n", stringifyTask(task))
-	return nil
-
-}
-
-type AddTaskCmd struct {
-	Name        string `help:"task name"`
-	Description string `aliases:"desc" help:"task description"`
-}
-
-func (c *AddTaskCmd) Run(deps *GlobalDependencies) error {
-	var task *model.Tasks
-	var err error
-	if len(c.Name) == 0 {
-		fmt.Println("Creating a new task...")
-		task, err = promptForNewTask()
-		if err != nil {
-			if errors.Is(err, huh.ErrUserAborted) {
-				fmt.Println("Task creation canceled.")
-				return nil
-			}
-			return err
-		}
-	} else {
-		task = &model.Tasks{
-			Name:        c.Name,
-			Description: c.Description,
+		if count > 1 {
+			return false
 		}
 	}
-
-	if task == nil {
-		return errors.New("task object was nil")
-	}
-
-	fmt.Println("Adding task...")
-	task, err = deps.Repo.CreateTask(context.Background(), task.Name, task.Description)
-	if err != nil {
-		return err
-	}
-
-	fmt.Printf("New task added! 🎉\nID: %d\n", task.ID)
-	return nil
-}
-
-type RemoveTaskCmd struct {
-	TaskID int `arg:"" name:"task-id" help:"ID of the task to remove"`
-}
-
-func (c *RemoveTaskCmd) Run(deps *GlobalDependencies) error {
-	err := deps.Repo.DeleteTask(context.Background(), c.TaskID)
-	if err != nil {
-		if errors.Is(err, data.ErrNotFound) {
-			fmt.Printf("Task with ID %d not found.\n", c.TaskID)
-			return nil
-		}
-		return err
-	}
-	return nil
-}
-
-type ListTasksCmd struct {
-	AsJSON bool `name:"json" help:"marshal the list as JSON"`
-}
-
-func (c *ListTasksCmd) Run(deps *GlobalDependencies) error {
-	tasks, err := deps.Repo.ListTasks(context.Background())
-	if err != nil {
-		return err
-	}
-
-	if c.AsJSON {
-		jsonBytes, err := json.MarshalIndent(tasks, "", "  ")
-		if err != nil {
-			return err
-		}
-		fmt.Printf("%s\n", jsonBytes)
-		return nil
-	}
-
-	for _, task := range tasks {
-		fmt.Println(stringifyTask(&task))
-	}
-	return nil
-}
-
-type ClearTasksCmd struct {
-	Force bool `help:"proceed without confirmation"`
-}
-
-func (c *ClearTasksCmd) Run(deps *GlobalDependencies) error {
-	if !c.Force {
-		var proceed bool
-		err := huh.NewConfirm().Value(&proceed).
-			Title("Are you sure you want to clear all tasks?").
-			Description("This is destructive and cannot be reversed.").
-			Run()
-		if err != nil {
-			return err
-		}
-
-		if !proceed {
-			return nil
-		}
-	}
-	return deps.Repo.DeleteAllTasks(context.Background())
-}
-
-// Other ------------------------------------------------------------------------
-
-func promptForNewTask() (*model.Tasks, error) {
-	var taskNameSuggestions = []string{
-		"Write documentation",
-		"Weekly review",
-		"Project planning",
-		"Client meeting",
-		"Code refactoring",
-		"Declutter email inbox",
-		"Research task",
-		"Bug fixes",
-
-		// Fun ones
-		"Fight procrastination dragon",
-		"Tame the inbox monster",
-		"World domination plans",
-		"Invent time machine",
-		"Teach office plant kung-fu",
-		"Debug platypus genes",
-		"Coffee-driven development",
-		"Learn interpretive coding",
-		"Teach cat SOLID principles",
-		"Quantum bug fixing",
-		"Knowledge mining",
-		"Mind gardening",
-		"Quest for flow state",
-		"Refactor spaghetti monster",
-		"Train AI to make tea",
-		"Conquer the laundry mountain",
-		"Reverse-engineer toaster intelligence",
-		"Pixel-perfect unicorn designs",
-		"Optimise sandwich algorithms",
-		"Deploy rocket-powered ducks",
-		"Master the art of WiFi summoning",
-		"Paint happy little bugs",
-		"Solve Rubik's cube of life",
-		"Document the dark matter API",
-		"Assemble IKEA time machine",
-		"Fix time-travel paradoxes",
-		"Write documentation in haiku",
-		"Brew potion of productivity",
-		"Unlock the secrets of YAML",
-		"Build empathy-driven robots",
-		"Complete 10,000-hour procrastination course",
-		"Outsource chores to squirrels",
-		"Encrypt the secret of happiness",
-		"Launch the procrastination-free startup",
-		"Train dog to debug pipelines",
-		"Publish manifesto on snack-driven development",
-		"Overclock the office coffee machine",
-		"Host team-building dragon hunt",
-		"Invent wireless hugs",
-	}
-
-	var task model.Tasks
-	err := huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().Value(&task.Name).
-				Title("What's the name of the task?").
-				Placeholder(taskNameSuggestions[rand.Intn(len(taskNameSuggestions))]).
-				Validate(func(s string) error {
-					if len(s) == 0 {
-						return errors.New("please enter a name")
-					}
-					return nil
-				}),
-			huh.NewInput().Value(&task.Description).
-				Title("Describe the task.").
-				Description("Leave blank to skip."),
-		),
-	).Run()
-
-	if err != nil {
-		return nil, err
-	}
-	return &task, nil
-}
-
-func stringifyTask(task *model.Tasks) string {
-	sb := strings.Builder{}
-	sb.WriteString(fmt.Sprintf("Name: %s\n", task.Name))
-
-	if len(task.Description) > 0 {
-		sb.WriteString(fmt.Sprintf("Description: %s\n", task.Description))
-	}
-
-	return lipgloss.JoinHorizontal(lipgloss.Top,
-		fmt.Sprintf("%d. ", task.ID),
-		sb.String(),
-	)
+	return count <= 1
 }

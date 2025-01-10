@@ -7,11 +7,11 @@ import (
 )
 
 type Respository struct {
-	DB *sql.DB
+	db *sql.DB
 }
 
 func NewRepository(db *sql.DB) *Respository {
 	return &Respository{
-		DB: db,
+		db: db,
 	}
 }
