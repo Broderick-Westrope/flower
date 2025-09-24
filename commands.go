@@ -1,11 +1,11 @@
 package main
 
-type WorkCmd struct {
+type StartCmd struct {
 	Task string `arg:"" help:"Task description"`
 }
 
-func (w *WorkCmd) Run() error {
-	return handleWork(w.Task)
+func (w *StartCmd) Run() error {
+	return handleStart(w.Task)
 }
 
 type BreakCmd struct{}

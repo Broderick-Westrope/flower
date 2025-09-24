@@ -3,9 +3,11 @@ package main
 import (
 	"fmt"
 	"time"
+
+	"github.com/google/uuid"
 )
 
-func handleWork(task string) error {
+func handleStart(task string) error {
 	if len(task) == 0 {
 		return fmt.Errorf("task description cannot be empty")
 	}
@@ -25,7 +27,7 @@ func handleWork(task string) error {
 
 	now := time.Now()
 	state.CurrentSession = &CurrentSession{
-		ID:        newSessionID(),
+		ID:        uuid.New().String(),
 		Task:      task,
 		StartTime: now,
 		State:     StateWorking,

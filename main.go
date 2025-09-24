@@ -5,9 +5,9 @@ import (
 )
 
 type CLI struct {
-	Work   WorkCmd   `cmd:"" help:"Start work session"`
-	Break  BreakCmd  `cmd:"" help:"End work, start break"`
-	Resume ResumeCmd `cmd:"" help:"End break, return to work"`
+	Start  StartCmd  `cmd:"" help:"Start flow, creating a new session if needed."`
+	Break  BreakCmd  `cmd:"" help:"End flow, start break."`
+	Resume ResumeCmd `cmd:"" help:"End break, resume the previous flow."`
 	Stop   StopCmd   `cmd:"" help:"End current session"`
 	Status StatusCmd `cmd:"" help:"Show current state"`
 	Log    LogCmd    `cmd:"" help:"Show recent sessions"`
