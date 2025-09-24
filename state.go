@@ -12,6 +12,8 @@ import (
 	"github.com/adrg/xdg"
 )
 
+const StateVersion = 1
+
 type SessionState string
 
 const (
@@ -42,6 +44,7 @@ type CompletedSession struct {
 }
 
 type AppState struct {
+	Version           int                `json:"version"`
 	CurrentSession    *CurrentSession    `json:"current_session"`
 	CurrentBreak      *CurrentBreak      `json:"current_break"`
 	CompletedSessions []CompletedSession `json:"completed_sessions"`
@@ -62,8 +65,10 @@ func loadState() (*AppState, error) {
 		return nil, err
 	}
 
-	if _, err := os.Stat(stateFile); os.IsNotExist(err) {
+	_, err = os.Stat(stateFile)
+	if os.IsNotExist(err) {
 		return &AppState{
+			Version:           StateVersion,
 			CompletedSessions: make([]CompletedSession, 0),
 		}, nil
 	}
@@ -82,6 +87,11 @@ func loadState() (*AppState, error) {
 		state.CompletedSessions = make([]CompletedSession, 0)
 	}
 
+	// Handle version migration
+	if state.Version <= 0 {
+		state.Version = StateVersion
+	}
+
 	return &state, nil
 }
 
@@ -90,6 +100,9 @@ func saveState(state *AppState) error {
 	if err != nil {
 		return err
 	}
+
+	// Ensure version is set
+	state.Version = StateVersion
 
 	data, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
