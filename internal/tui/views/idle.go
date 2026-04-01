@@ -65,18 +65,32 @@ func (v *IdleView) Update(msg tea.Msg) tea.Cmd {
 
 // View renders the idle screen.
 func (v *IdleView) View() string {
+	title := styles.Title.Render("🏵️ Flower")
+	prompt := "What are you working on?"
+	helpBar := RenderHelpBar([]KeyBinding{
+		{Key: "enter", Description: "start"},
+		{Key: "l", Description: "log"},
+		{Key: "q", Description: "quit"},
+	})
+
+	// Measure the widest line so the text input matches the natural view width.
+	contentWidth := max(
+		lipgloss.Width(title),
+		lipgloss.Width(prompt),
+		lipgloss.Width(helpBar),
+	)
+
+	// Width controls the input area only; subtract the prompt width.
+	v.input.Width = contentWidth - lipgloss.Width(v.input.Prompt)
+
 	return lipgloss.JoinVertical(lipgloss.Left,
-		styles.Title.Render("Flower"),
+		title,
 		"",
-		"What are you working on?",
-		"> "+v.input.View(),
+		prompt,
+		v.input.View(),
 		"",
-		styles.Separator(20),
-		RenderHelpBar([]KeyBinding{
-			{Key: "enter", Description: "start"},
-			{Key: "l", Description: "log"},
-			{Key: "q", Description: "quit"},
-		}),
+		styles.Separator(contentWidth),
+		helpBar,
 	)
 }
 

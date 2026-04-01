@@ -37,5 +37,5 @@ func Separator(width int) string {
 	if width <= 0 {
 		return ""
 	}
-	return strings.Repeat("─", width)
+	return HelpBar.Render(strings.Repeat("─", width))
 }
