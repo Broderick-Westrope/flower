@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/Broderick-Westrope/flower/internal/flowtime"
+	"github.com/Broderick-Westrope/flower/internal/paginate"
 	"github.com/Broderick-Westrope/flower/internal/tui/msgs"
 	"github.com/Broderick-Westrope/flower/internal/tui/styles"
 	tea "github.com/charmbracelet/bubbletea"
@@ -43,33 +44,6 @@ func (v *LogView) totalPages() int {
 		pages++
 	}
 	return pages
-}
-
-// reversePaginate returns sessions for the current page in newest-first order.
-func (v *LogView) reversePaginate() []flowtime.CompletedSession {
-	total := len(v.sessions)
-	if total == 0 {
-		return nil
-	}
-
-	// Sessions are stored oldest-first; we want newest-first pages.
-	// Page 1 shows the last pageSize items (reversed), page 2 the next batch, etc.
-	endIdx := total - (v.page-1)*v.pageSize
-	startIdx := endIdx - v.pageSize
-	if startIdx < 0 {
-		startIdx = 0
-	}
-	if endIdx < 0 {
-		return nil
-	}
-
-	slice := v.sessions[startIdx:endIdx]
-	// Reverse to newest-first.
-	result := make([]flowtime.CompletedSession, len(slice))
-	for i, s := range slice {
-		result[len(slice)-1-i] = s
-	}
-	return result
 }
 
 // Update handles pagination keys.
@@ -112,7 +86,7 @@ func (v *LogView) View() string {
 	}
 
 	now := time.Now()
-	page := v.reversePaginate()
+	page := paginate.ReversePaginate(v.sessions, v.page, v.pageSize)
 	rows := make([][]string, len(page))
 	for i, s := range page {
 		breakStr := "-"
@@ -150,7 +124,8 @@ func (v *LogView) View() string {
 		styles.Separator(20),
 		RenderHelpBar([]KeyBinding{
 			{Key: "esc", Description: "back"},
-			{Key: "↑/↓", Description: "page"},
+			{Key: "↑", Description: "newer"},
+			{Key: "↓", Description: "older"},
 			{Key: "q", Description: "quit"},
 		}),
 	)

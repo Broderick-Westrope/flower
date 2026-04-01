@@ -6,6 +6,16 @@ import (
 	"time"
 )
 
+var (
+	ErrNoActiveSession   = errors.New("no active session")
+	ErrSessionActive     = errors.New("session already active")
+	ErrAlreadyOnBreak    = errors.New("already on break")
+	ErrAlreadyFlowing    = errors.New("already in flow state")
+	ErrNoSessionToResume = errors.New("no session to resume")
+	ErrTaskEmpty         = errors.New("task cannot be empty")
+	ErrTaskTooLong       = errors.New("task cannot exceed 100 characters")
+)
+
 // Session represents an active flow session.
 type Session struct {
 	Task      string
@@ -28,7 +38,7 @@ type CompletedSession struct {
 
 // FlowState holds the full state of the flowtime timer.
 type FlowState struct {
-	Clock             Clock
+	clock             Clock
 	CurrentSession    *Session
 	CurrentBreak      *Break
 	CompletedSessions []CompletedSession
@@ -37,27 +47,33 @@ type FlowState struct {
 // NewFlowState creates a new empty FlowState using the provided clock.
 func NewFlowState(clock Clock) *FlowState {
 	return &FlowState{
-		Clock:             clock,
+		clock:             clock,
 		CompletedSessions: []CompletedSession{},
 	}
+}
+
+// SetClock sets the clock on the FlowState. This is used by the storage layer
+// to inject a clock after deserialization.
+func (s *FlowState) SetClock(c Clock) {
+	s.clock = c
 }
 
 // StartSession begins a new flow session with the given task name.
 // Returns an error if a session is already active, the task is empty, or the task exceeds 100 characters.
 func (s *FlowState) StartSession(task string) error {
 	if task == "" {
-		return errors.New("task must not be empty")
+		return ErrTaskEmpty
 	}
 	if len(task) > 100 {
-		return fmt.Errorf("task must be 100 characters or less, got %d", len(task))
+		return fmt.Errorf("%w: got %d characters", ErrTaskTooLong, len(task))
 	}
 	if s.CurrentSession != nil {
-		return errors.New("session already active")
+		return ErrSessionActive
 	}
 
 	s.CurrentSession = &Session{
 		Task:      task,
-		StartTime: s.Clock.Now(),
+		StartTime: s.clock.Now(),
 	}
 	return nil
 }
@@ -66,13 +82,13 @@ func (s *FlowState) StartSession(task string) error {
 // Returns an error if no session is active or if already on a break.
 func (s *FlowState) TakeBreak() error {
 	if s.CurrentSession == nil {
-		return errors.New("no active session")
+		return ErrNoActiveSession
 	}
 	if s.CurrentBreak != nil {
-		return errors.New("already on break")
+		return ErrAlreadyOnBreak
 	}
 
-	now := s.Clock.Now()
+	now := s.clock.Now()
 	workDuration := now.Sub(s.CurrentSession.StartTime)
 	suggestedBreak := CalculateBreak(workDuration)
 
@@ -89,7 +105,7 @@ func (s *FlowState) TakeBreak() error {
 func (s *FlowState) Resume() (resumedCurrent bool, err error) {
 	// Path 1: on break with active session — complete current and start new
 	if s.CurrentSession != nil && s.CurrentBreak != nil {
-		now := s.Clock.Now()
+		now := s.clock.Now()
 		flowDuration := s.CurrentBreak.StartTime.Sub(s.CurrentSession.StartTime)
 		breakDuration := now.Sub(s.CurrentBreak.StartTime)
 
@@ -114,28 +130,28 @@ func (s *FlowState) Resume() (resumedCurrent bool, err error) {
 		lastTask := s.CompletedSessions[len(s.CompletedSessions)-1].Task
 		s.CurrentSession = &Session{
 			Task:      lastTask,
-			StartTime: s.Clock.Now(),
+			StartTime: s.clock.Now(),
 		}
 		return false, nil
 	}
 
 	// Path 3: already flowing (session active, no break)
 	if s.CurrentSession != nil && s.CurrentBreak == nil {
-		return false, errors.New("already in flow state")
+		return false, ErrAlreadyFlowing
 	}
 
 	// Path 4: no session and no history
-	return false, errors.New("no session to resume")
+	return false, ErrNoSessionToResume
 }
 
 // Stop ends the current session and returns the completed session.
 // Returns an error if no session is active.
 func (s *FlowState) Stop() (*CompletedSession, error) {
 	if s.CurrentSession == nil {
-		return nil, errors.New("no active session")
+		return nil, ErrNoActiveSession
 	}
 
-	now := s.Clock.Now()
+	now := s.clock.Now()
 	var completed CompletedSession
 
 	if s.CurrentBreak != nil {

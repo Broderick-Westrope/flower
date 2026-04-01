@@ -66,8 +66,11 @@ func (s *JSONStore) Load() (*flowtime.FlowState, error) {
 	}
 
 	_, err = os.Stat(stateFile)
-	if os.IsNotExist(err) {
-		return flowtime.NewFlowState(s.clock), nil
+	if err != nil {
+		if os.IsNotExist(err) {
+			return flowtime.NewFlowState(s.clock), nil
+		}
+		return nil, fmt.Errorf("checking state file: %w", err)
 	}
 
 	data, err := os.ReadFile(stateFile)
@@ -78,6 +81,10 @@ func (s *JSONStore) Load() (*flowtime.FlowState, error) {
 	var js jsonState
 	if err := json.Unmarshal(data, &js); err != nil {
 		return nil, fmt.Errorf("parsing state file: %w", err)
+	}
+
+	if js.Version != stateVersion {
+		return nil, fmt.Errorf("unsupported state version %d (expected %d)", js.Version, stateVersion)
 	}
 
 	state := flowtime.NewFlowState(s.clock)

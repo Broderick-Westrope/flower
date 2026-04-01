@@ -25,9 +25,9 @@ func main() {
 	}
 
 	ctx := &cli.Context{
-		Store:     jsonStore,
-		JSONStore: jsonStore,
-		RunTUI:    runTUI,
+		Store:       jsonStore,
+		RunTUI:      runTUI,
+		LocateStore: jsonStore.GetFilePath,
 	}
 	var c cli.CLI
 	kongCtx := kong.Parse(&c,

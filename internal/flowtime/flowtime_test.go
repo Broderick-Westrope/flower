@@ -1,6 +1,7 @@
 package flowtime
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -46,8 +47,8 @@ func TestStartSession(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error when session already active")
 		}
-		if !strings.Contains(err.Error(), "session already active") {
-			t.Errorf("error = %q, want it to contain %q", err.Error(), "session already active")
+		if !errors.Is(err, ErrSessionActive) {
+			t.Errorf("error = %q, want %q", err.Error(), ErrSessionActive)
 		}
 	})
 
@@ -59,8 +60,8 @@ func TestStartSession(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error on empty task")
 		}
-		if !strings.Contains(err.Error(), "must not be empty") {
-			t.Errorf("error = %q, want it to contain %q", err.Error(), "must not be empty")
+		if !errors.Is(err, ErrTaskEmpty) {
+			t.Errorf("error = %q, want %q", err.Error(), ErrTaskEmpty)
 		}
 	})
 
@@ -73,8 +74,8 @@ func TestStartSession(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error on task > 100 chars")
 		}
-		if !strings.Contains(err.Error(), "100 characters or less") {
-			t.Errorf("error = %q, want it to contain %q", err.Error(), "100 characters or less")
+		if !errors.Is(err, ErrTaskTooLong) {
+			t.Errorf("error = %q, want %q", err.Error(), ErrTaskTooLong)
 		}
 	})
 }
@@ -111,8 +112,8 @@ func TestTakeBreak(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error when no session active")
 		}
-		if !strings.Contains(err.Error(), "no active session") {
-			t.Errorf("error = %q, want it to contain %q", err.Error(), "no active session")
+		if !errors.Is(err, ErrNoActiveSession) {
+			t.Errorf("error = %q, want %q", err.Error(), ErrNoActiveSession)
 		}
 	})
 
@@ -128,8 +129,8 @@ func TestTakeBreak(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error when already on break")
 		}
-		if !strings.Contains(err.Error(), "already on break") {
-			t.Errorf("error = %q, want it to contain %q", err.Error(), "already on break")
+		if !errors.Is(err, ErrAlreadyOnBreak) {
+			t.Errorf("error = %q, want %q", err.Error(), ErrAlreadyOnBreak)
 		}
 	})
 }
@@ -215,8 +216,8 @@ func TestResume(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error when already flowing")
 		}
-		if !strings.Contains(err.Error(), "already in flow state") {
-			t.Errorf("error = %q, want it to contain %q", err.Error(), "already in flow state")
+		if !errors.Is(err, ErrAlreadyFlowing) {
+			t.Errorf("error = %q, want %q", err.Error(), ErrAlreadyFlowing)
 		}
 	})
 
@@ -228,8 +229,8 @@ func TestResume(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error with no session and no history")
 		}
-		if !strings.Contains(err.Error(), "no session to resume") {
-			t.Errorf("error = %q, want it to contain %q", err.Error(), "no session to resume")
+		if !errors.Is(err, ErrNoSessionToResume) {
+			t.Errorf("error = %q, want %q", err.Error(), ErrNoSessionToResume)
 		}
 	})
 }
@@ -301,8 +302,8 @@ func TestStop(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error when no session active")
 		}
-		if !strings.Contains(err.Error(), "no active session") {
-			t.Errorf("error = %q, want it to contain %q", err.Error(), "no active session")
+		if !errors.Is(err, ErrNoActiveSession) {
+			t.Errorf("error = %q, want %q", err.Error(), ErrNoActiveSession)
 		}
 	})
 }

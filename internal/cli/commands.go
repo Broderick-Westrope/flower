@@ -3,8 +3,6 @@ package cli
 import (
 	"errors"
 	"fmt"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/Broderick-Westrope/flower/internal/flowtime"
@@ -13,9 +11,9 @@ import (
 
 // Context holds shared dependencies for CLI commands.
 type Context struct {
-	Store     storage.Store
-	JSONStore *storage.JSONStore
-	RunTUI    func(store storage.Store) error // injected by main.go to avoid circular import
+	Store       storage.Store
+	RunTUI      func(store storage.Store) error // injected by main.go to avoid circular import
+	LocateStore func() (string, error)          // returns state file path
 }
 
 // CLI is the top-level Kong command structure.
@@ -37,8 +35,6 @@ type StartCmd struct {
 }
 
 func (cmd *StartCmd) Run(ctx *Context) error {
-	cmd.Task = strings.TrimSuffix(strings.TrimPrefix(strconv.Quote(cmd.Task), "\""), "\"")
-
 	state, err := ctx.Store.Load()
 	if err != nil {
 		return fmt.Errorf("loading state: %w", err)
@@ -189,7 +185,7 @@ func (cmd *LogCmd) Run(ctx *Context) error {
 type LocateCmd struct{}
 
 func (cmd *LocateCmd) Run(ctx *Context) error {
-	fp, err := ctx.JSONStore.GetFilePath()
+	fp, err := ctx.LocateStore()
 	if err != nil {
 		return fmt.Errorf("getting state file path: %w", err)
 	}

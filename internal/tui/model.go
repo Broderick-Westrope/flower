@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/Broderick-Westrope/flower/internal/flowtime"
 	"github.com/Broderick-Westrope/flower/internal/storage"
@@ -31,10 +32,10 @@ type Model struct {
 	breakView *views.BreakView
 	logView   *views.LogView
 
-	err      error
-	errTimer int
-	width    int
-	height   int
+	err         error
+	errDeadline time.Time
+	width       int
+	height      int
 }
 
 var _ tea.Model = (*Model)(nil)
@@ -99,7 +100,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ErrorMsg:
 		m.err = msg.Err
-		m.errTimer = 5
+		m.errDeadline = time.Now().Add(5 * time.Second)
 		return m, nil
 
 	case TickMsg:
@@ -185,11 +186,9 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) handleTick() (tea.Model, tea.Cmd) {
-	if m.errTimer > 0 {
-		m.errTimer--
-		if m.errTimer == 0 {
-			m.err = nil
-		}
+	if !m.errDeadline.IsZero() && time.Now().After(m.errDeadline) {
+		m.err = nil
+		m.errDeadline = time.Time{}
 	}
 
 	cmd := m.delegateToActiveView(TickMsg{})

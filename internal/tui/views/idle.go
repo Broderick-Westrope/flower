@@ -30,6 +30,15 @@ func (v *IdleView) Init() tea.Cmd {
 // Update handles key events for the idle view.
 func (v *IdleView) Update(msg tea.Msg) tea.Cmd {
 	if msg, ok := msg.(tea.KeyMsg); ok {
+		switch msg.String() {
+		case "esc":
+			if v.input.Value() != "" {
+				v.input.Reset()
+				return nil
+			}
+			return nil
+		}
+
 		// When the input is empty, intercept shortcut keys.
 		if v.input.Value() == "" {
 			switch msg.String() {
