@@ -205,7 +205,7 @@ func (m *Model) handleStartSession(task string) (tea.Model, tea.Cmd) {
 
 	m.activeView = viewFlow
 	m.flowView.SetSession(m.state.CurrentSession)
-	return m, nil
+	return m, m.flowView.Init()
 }
 
 func (m *Model) handleTakeBreak() (tea.Model, tea.Cmd) {
@@ -232,7 +232,7 @@ func (m *Model) handleResume() (tea.Model, tea.Cmd) {
 
 	m.activeView = viewFlow
 	m.flowView.SetSession(m.state.CurrentSession)
-	return m, nil
+	return m, m.flowView.Init()
 }
 
 func (m *Model) handleStop() (tea.Model, tea.Cmd) {
@@ -246,7 +246,7 @@ func (m *Model) handleStop() (tea.Model, tea.Cmd) {
 
 	m.activeView = viewIdle
 	m.idleView.Reset()
-	return m, nil
+	return m, m.idleView.Init()
 }
 
 func (m *Model) handleShowLog() (tea.Model, tea.Cmd) {
@@ -261,8 +261,10 @@ func (m *Model) handleBack() (tea.Model, tea.Cmd) {
 		m.activeView = viewBreak
 	case m.state.CurrentSession != nil:
 		m.activeView = viewFlow
+		return m, m.flowView.Init()
 	default:
 		m.activeView = viewIdle
+		return m, m.idleView.Init()
 	}
 	return m, nil
 }
