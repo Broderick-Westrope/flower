@@ -1,4 +1,4 @@
-# Flower
+# 🏵️ 🍃 🧘 Flower
 
 A minimal CLI & TUI tool for the Flowtime Technique - a productivity method similar to Pomodoro but with an emphasis on following your natural rhythm of flow/break cycles. It was created by Zoe Read-Bivens as described [here](https://medium.com/@UrgentPigeon/the-flowtime-technique-7685101bd191).
 
