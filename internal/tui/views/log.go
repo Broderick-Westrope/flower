@@ -13,11 +13,13 @@ import (
 	"github.com/charmbracelet/lipgloss/table"
 )
 
-// LogView displays a paginated table of completed sessions (newest first).
+// LogView displays a paginated table of completed sessions (newest first)
+// with cursor-based row selection for deletion.
 type LogView struct {
 	sessions []flowtime.CompletedSession
 	page     int
 	pageSize int
+	cursor   int // selected row on the current page (0-indexed)
 }
 
 // NewLogView creates a LogView with the given page size.
@@ -28,10 +30,11 @@ func NewLogView(pageSize int) *LogView {
 	}
 }
 
-// SetSessions updates the session data and resets to page 1.
+// SetSessions updates the session data and resets to page 1 with cursor at top.
 func (v *LogView) SetSessions(sessions []flowtime.CompletedSession) {
 	v.sessions = sessions
 	v.page = 1
+	v.cursor = 0
 }
 
 // totalPages returns the number of pages needed for all sessions.
@@ -46,17 +49,50 @@ func (v *LogView) totalPages() int {
 	return pages
 }
 
-// Update handles pagination keys.
+// pageLen returns the number of items on the current page.
+func (v *LogView) pageLen() int {
+	page := paginate.ReversePaginate(v.sessions, v.page, v.pageSize)
+	return len(page)
+}
+
+// activeIndex maps the current (page, cursor) to an index in the active sessions slice.
+func (v *LogView) activeIndex() int {
+	return len(v.sessions) - (v.page-1)*v.pageSize - v.cursor - 1
+}
+
+// Update handles cursor movement, pagination, and delete keys.
 func (v *LogView) Update(msg tea.Msg) tea.Cmd {
 	if msg, ok := msg.(tea.KeyMsg); ok {
 		switch msg.String() {
 		case "up", "k":
-			if v.page > 1 {
+			if v.cursor > 0 {
+				v.cursor--
+			} else if v.page > 1 {
 				v.page--
+				v.cursor = v.pageLen() - 1
 			}
 		case "down", "j":
-			if v.page < v.totalPages() {
+			if v.cursor < v.pageLen()-1 {
+				v.cursor++
+			} else if v.page < v.totalPages() {
 				v.page++
+				v.cursor = 0
+			}
+		case "d":
+			if len(v.sessions) > 0 {
+				idx := v.activeIndex()
+				return func() tea.Msg { return msgs.RequestDeleteSessionMsg{ActiveIndex: idx} }
+			}
+		case "D":
+			if len(v.sessions) > 0 {
+				return func() tea.Msg {
+					return msgs.RequestConfirmMsg{
+						Action: msgs.ConfirmAction{
+							Prompt: fmt.Sprintf("Delete all %d sessions?", len(v.sessions)),
+							OnYes:  msgs.DeleteAllSessionsMsg{},
+						},
+					}
+				}
 			}
 		case "esc":
 			return func() tea.Msg { return msgs.BackMsg{} }
@@ -67,9 +103,9 @@ func (v *LogView) Update(msg tea.Msg) tea.Cmd {
 	return nil
 }
 
-// View renders the session log table.
+// View renders the session log table with cursor highlighting.
 func (v *LogView) View() string {
-	title := styles.Title.Render("Session Log")
+	title := styles.Title.Render("📜 Session Log")
 
 	if len(v.sessions) == 0 {
 		emptyMsg := "No completed sessions yet."
@@ -94,6 +130,12 @@ func (v *LogView) View() string {
 
 	now := time.Now()
 	page := paginate.ReversePaginate(v.sessions, v.page, v.pageSize)
+
+	// Clamp cursor if sessions were deleted and page shrunk.
+	if v.cursor >= len(page) {
+		v.cursor = max(0, len(page)-1)
+	}
+
 	rows := make([][]string, len(page))
 	for i, s := range page {
 		breakStr := "-"
@@ -108,6 +150,8 @@ func (v *LogView) View() string {
 		}
 	}
 
+	selectedRow := v.cursor
+
 	t := table.New().
 		Border(lipgloss.NormalBorder()).
 		Headers("COMPLETED AT", "TASK", "FLOW", "BREAK").
@@ -116,6 +160,10 @@ func (v *LogView) View() string {
 			if row == table.HeaderRow {
 				return styles.TableHeader
 			}
+			// row is 0-indexed for data rows in lipgloss/table
+			if row == selectedRow {
+				return styles.SelectedRow
+			}
 			return lipgloss.NewStyle()
 		})
 
@@ -123,8 +171,9 @@ func (v *LogView) View() string {
 	tableRendered := t.Render()
 	helpBar := RenderHelpBar([]KeyBinding{
 		{Key: "esc", Description: "back"},
-		{Key: "↑", Description: "newer"},
-		{Key: "↓", Description: "older"},
+		{Key: "j/k", Description: "navigate"},
+		{Key: "d", Description: "delete"},
+		{Key: "D", Description: "delete all"},
 		{Key: "q", Description: "quit"},
 	})
 

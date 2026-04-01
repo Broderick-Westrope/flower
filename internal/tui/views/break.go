@@ -84,6 +84,7 @@ func (v *BreakView) View() string {
 	helpBar := RenderHelpBar([]KeyBinding{
 		{Key: "space", Description: "resume"},
 		{Key: "s", Description: "stop"},
+		{Key: "c", Description: "cancel"},
 		{Key: "l", Description: "log"},
 		{Key: "q", Description: "quit"},
 	})
@@ -96,7 +97,7 @@ func (v *BreakView) View() string {
 	)
 
 	return lipgloss.JoinVertical(lipgloss.Left,
-		styles.Title.Render("Break"),
+		styles.Title.Render("🧘 Break"),
 		"",
 		taskLine,
 		timerLine,

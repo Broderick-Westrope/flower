@@ -7,11 +7,17 @@ package tui
 import "github.com/Broderick-Westrope/flower/internal/tui/msgs"
 
 type (
-	TickMsg         = msgs.TickMsg
-	StartSessionMsg = msgs.StartSessionMsg
-	ShowLogMsg      = msgs.ShowLogMsg
-	BackMsg         = msgs.BackMsg
-	ErrorMsg        = msgs.ErrorMsg
+	TickMsg                 = msgs.TickMsg
+	StartSessionMsg         = msgs.StartSessionMsg
+	ShowLogMsg              = msgs.ShowLogMsg
+	BackMsg                 = msgs.BackMsg
+	ErrorMsg                = msgs.ErrorMsg
+	CancelSessionMsg        = msgs.CancelSessionMsg
+	DeleteSessionMsg        = msgs.DeleteSessionMsg
+	DeleteAllSessionsMsg    = msgs.DeleteAllSessionsMsg
+	RequestDeleteSessionMsg = msgs.RequestDeleteSessionMsg
+	RequestConfirmMsg       = msgs.RequestConfirmMsg
+	ConfirmResultMsg        = msgs.ConfirmResultMsg
 )
 
 var Tick = msgs.Tick

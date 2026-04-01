@@ -22,8 +22,11 @@ type CLI struct {
 	Break  BreakCmd  `cmd:"" help:"End flow, start break."`
 	Resume ResumeCmd `cmd:"" help:"End break, resume the current or previous session."`
 	Stop   StopCmd   `cmd:"" help:"End current session."`
+	Cancel CancelCmd `cmd:"" help:"Cancel the current session without recording it."`
 	Status StatusCmd `cmd:"" help:"Show current state."`
 	Log    LogCmd    `cmd:"" help:"Show recent sessions."`
+	Delete DeleteCmd `cmd:"" help:"Delete a completed session by index."`
+	Clear  ClearCmd  `cmd:"" help:"Delete all completed sessions."`
 	Locate LocateCmd `cmd:"" help:"Show the state file path."`
 }
 
@@ -177,8 +180,164 @@ func (cmd *LogCmd) Run(ctx *Context) error {
 		return fmt.Errorf("loading state: %w", err)
 	}
 
-	PrintLog(state.CompletedSessions, cmd.Page, cmd.Count, time.Now())
+	PrintLog(state.ActiveSessions(), cmd.Page, cmd.Count, time.Now())
 	return nil
+}
+
+// CancelCmd discards the current session without recording it.
+type CancelCmd struct {
+	Yes bool `short:"y" help:"Skip confirmation prompt."`
+}
+
+func (cmd *CancelCmd) Run(ctx *Context) error {
+	state, err := ctx.Store.Load()
+	if err != nil {
+		return fmt.Errorf("loading state: %w", err)
+	}
+
+	if state.CurrentSession == nil {
+		return errors.New("no active session to cancel")
+	}
+
+	if !cmd.Yes {
+		ok, err := confirm(fmt.Sprintf("Cancel session %q?", state.CurrentSession.Task))
+		if err != nil {
+			return err
+		}
+		if !ok {
+			fmt.Println("Cancelled.")
+			return nil
+		}
+	}
+
+	if err := state.CancelSession(); err != nil {
+		return fmt.Errorf("cancelling session: %w", err)
+	}
+
+	if err := ctx.Store.Save(state); err != nil {
+		return fmt.Errorf("saving state: %w", err)
+	}
+
+	fmt.Println("Session cancelled.")
+	return nil
+}
+
+// DeleteCmd soft-deletes a completed session by its display index (1-based, newest first).
+type DeleteCmd struct {
+	Index int  `arg:"" help:"Session number (1 = most recent)."`
+	Yes   bool `short:"y" help:"Skip confirmation prompt."`
+}
+
+func (cmd *DeleteCmd) Run(ctx *Context) error {
+	if cmd.Index <= 0 {
+		return errors.New("index must be a positive number")
+	}
+
+	state, err := ctx.Store.Load()
+	if err != nil {
+		return fmt.Errorf("loading state: %w", err)
+	}
+
+	active := state.ActiveSessions()
+	if len(active) == 0 {
+		return errors.New("no sessions to delete")
+	}
+
+	// Convert 1-based newest-first display index to the underlying slice index.
+	displayIndex := cmd.Index - 1
+	if displayIndex >= len(active) {
+		return fmt.Errorf("index %d out of range (have %d sessions)", cmd.Index, len(active))
+	}
+
+	// Map from active-list index (newest-first) to full CompletedSessions index.
+	// Active list preserves chronological order; display index 0 = last active session.
+	activeReversed := len(active) - 1 - displayIndex
+	target := active[activeReversed]
+
+	// Find the matching entry in the full slice.
+	fullIndex := -1
+	for i, cs := range state.CompletedSessions {
+		if cs.CompletedAt.Equal(target.CompletedAt) && cs.Task == target.Task && cs.DeletedAt == nil {
+			fullIndex = i
+			break
+		}
+	}
+	if fullIndex == -1 {
+		return errors.New("session not found")
+	}
+
+	if !cmd.Yes {
+		ok, err := confirm(fmt.Sprintf("Delete session %q (%s)?",
+			target.Task, flowtime.FormatDuration(target.FlowDuration)))
+		if err != nil {
+			return err
+		}
+		if !ok {
+			fmt.Println("Cancelled.")
+			return nil
+		}
+	}
+
+	if err := state.DeleteSession(fullIndex); err != nil {
+		return fmt.Errorf("deleting session: %w", err)
+	}
+
+	if err := ctx.Store.Save(state); err != nil {
+		return fmt.Errorf("saving state: %w", err)
+	}
+
+	fmt.Println("Session deleted.")
+	return nil
+}
+
+// ClearCmd soft-deletes all completed sessions.
+type ClearCmd struct {
+	Yes bool `short:"y" help:"Skip confirmation prompt."`
+}
+
+func (cmd *ClearCmd) Run(ctx *Context) error {
+	state, err := ctx.Store.Load()
+	if err != nil {
+		return fmt.Errorf("loading state: %w", err)
+	}
+
+	active := state.ActiveSessions()
+	if len(active) == 0 {
+		return errors.New("no sessions to delete")
+	}
+
+	if !cmd.Yes {
+		ok, err := confirm(fmt.Sprintf("Delete all %d sessions?", len(active)))
+		if err != nil {
+			return err
+		}
+		if !ok {
+			fmt.Println("Cancelled.")
+			return nil
+		}
+	}
+
+	if err := state.DeleteAllSessions(); err != nil {
+		return fmt.Errorf("deleting sessions: %w", err)
+	}
+
+	if err := ctx.Store.Save(state); err != nil {
+		return fmt.Errorf("saving state: %w", err)
+	}
+
+	fmt.Printf("Deleted %d sessions.\n", len(active))
+	return nil
+}
+
+// confirm prompts the user with the given message and reads y/n from stdin.
+func confirm(prompt string) (bool, error) {
+	fmt.Printf("%s [y/N] ", prompt)
+	var response string
+	if _, err := fmt.Scanln(&response); err != nil {
+		// EOF or empty input = no
+		return false, nil
+	}
+	return response == "y" || response == "Y", nil
 }
 
 // LocateCmd shows the state file path.

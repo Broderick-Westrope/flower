@@ -49,6 +49,7 @@ type jsonCompletedSession struct {
 	FlowDuration  time.Duration  `json:"flow_duration"`
 	BreakDuration *time.Duration `json:"break_duration"`
 	CompletedAt   time.Time      `json:"completed_at"`
+	DeletedAt     *time.Time     `json:"deleted_at,omitempty"`
 }
 
 type jsonState struct {
@@ -113,6 +114,10 @@ func (s *JSONStore) Load() (*flowtime.FlowState, error) {
 			bd := *cs.BreakDuration
 			completed.BreakDuration = &bd
 		}
+		if cs.DeletedAt != nil {
+			t := *cs.DeletedAt
+			completed.DeletedAt = &t
+		}
 		state.CompletedSessions = append(state.CompletedSessions, completed)
 	}
 
@@ -154,6 +159,10 @@ func (s *JSONStore) Save(state *flowtime.FlowState) error {
 		if cs.BreakDuration != nil {
 			bd := *cs.BreakDuration
 			jcs.BreakDuration = &bd
+		}
+		if cs.DeletedAt != nil {
+			t := *cs.DeletedAt
+			jcs.DeletedAt = &t
 		}
 		js.CompletedSessions = append(js.CompletedSessions, jcs)
 	}

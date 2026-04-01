@@ -52,6 +52,7 @@ func (v *FlowView) View() string {
 	helpBar := RenderHelpBar([]KeyBinding{
 		{Key: "space", Description: "break"},
 		{Key: "s", Description: "stop"},
+		{Key: "c", Description: "cancel"},
 		{Key: "l", Description: "log"},
 		{Key: "q", Description: "quit"},
 	})
@@ -63,7 +64,7 @@ func (v *FlowView) View() string {
 	)
 
 	return lipgloss.JoinVertical(lipgloss.Left,
-		styles.Title.Render("Flowing"),
+		styles.Title.Render("🍃 Flowing"),
 		"",
 		taskLine,
 		timerLine,

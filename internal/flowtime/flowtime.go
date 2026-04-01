@@ -7,13 +7,16 @@ import (
 )
 
 var (
-	ErrNoActiveSession   = errors.New("no active session")
-	ErrSessionActive     = errors.New("session already active")
-	ErrAlreadyOnBreak    = errors.New("already on break")
-	ErrAlreadyFlowing    = errors.New("already in flow state")
-	ErrNoSessionToResume = errors.New("no session to resume")
-	ErrTaskEmpty         = errors.New("task cannot be empty")
-	ErrTaskTooLong       = errors.New("task cannot exceed 100 characters")
+	ErrNoActiveSession    = errors.New("no active session")
+	ErrSessionActive      = errors.New("session already active")
+	ErrAlreadyOnBreak     = errors.New("already on break")
+	ErrAlreadyFlowing     = errors.New("already in flow state")
+	ErrNoSessionToResume  = errors.New("no session to resume")
+	ErrTaskEmpty          = errors.New("task cannot be empty")
+	ErrTaskTooLong        = errors.New("task cannot exceed 100 characters")
+	ErrSessionNotFound    = errors.New("session not found")
+	ErrSessionDeleted     = errors.New("session already deleted")
+	ErrNoSessionsToDelete = errors.New("no sessions to delete")
 )
 
 // Session represents an active flow session.
@@ -34,6 +37,7 @@ type CompletedSession struct {
 	FlowDuration  time.Duration
 	BreakDuration *time.Duration
 	CompletedAt   time.Time
+	DeletedAt     *time.Time
 }
 
 // FlowState holds the full state of the flowtime timer.
@@ -125,14 +129,17 @@ func (s *FlowState) Resume() (resumedCurrent bool, err error) {
 		return true, nil
 	}
 
-	// Path 2: idle with history — start new session with last task
-	if s.CurrentSession == nil && s.CurrentBreak == nil && len(s.CompletedSessions) > 0 {
-		lastTask := s.CompletedSessions[len(s.CompletedSessions)-1].Task
-		s.CurrentSession = &Session{
-			Task:      lastTask,
-			StartTime: s.clock.Now(),
+	// Path 2: idle with history — start new session with last active task
+	if s.CurrentSession == nil && s.CurrentBreak == nil {
+		active := s.ActiveSessions()
+		if len(active) > 0 {
+			lastTask := active[len(active)-1].Task
+			s.CurrentSession = &Session{
+				Task:      lastTask,
+				StartTime: s.clock.Now(),
+			}
+			return false, nil
 		}
-		return false, nil
 	}
 
 	// Path 3: already flowing (session active, no break)
@@ -179,4 +186,60 @@ func (s *FlowState) Stop() (*CompletedSession, error) {
 	s.CurrentBreak = nil
 
 	return &completed, nil
+}
+
+// CancelSession discards the current session without recording it.
+// Returns an error if no session is active.
+func (s *FlowState) CancelSession() error {
+	if s.CurrentSession == nil {
+		return ErrNoActiveSession
+	}
+
+	s.CurrentSession = nil
+	s.CurrentBreak = nil
+	return nil
+}
+
+// ActiveSessions returns only non-deleted completed sessions, preserving order.
+func (s *FlowState) ActiveSessions() []CompletedSession {
+	var active []CompletedSession
+	for _, cs := range s.CompletedSessions {
+		if cs.DeletedAt == nil {
+			active = append(active, cs)
+		}
+	}
+	return active
+}
+
+// DeleteSession soft-deletes the completed session at the given index (into the full
+// CompletedSessions slice, not the filtered active list). Returns an error if the
+// index is out of range or the session is already deleted.
+func (s *FlowState) DeleteSession(index int) error {
+	if index < 0 || index >= len(s.CompletedSessions) {
+		return ErrSessionNotFound
+	}
+	if s.CompletedSessions[index].DeletedAt != nil {
+		return ErrSessionDeleted
+	}
+
+	now := s.clock.Now()
+	s.CompletedSessions[index].DeletedAt = &now
+	return nil
+}
+
+// DeleteAllSessions soft-deletes all non-deleted completed sessions.
+// Returns an error if there are no active sessions to delete.
+func (s *FlowState) DeleteAllSessions() error {
+	active := s.ActiveSessions()
+	if len(active) == 0 {
+		return ErrNoSessionsToDelete
+	}
+
+	now := s.clock.Now()
+	for i := range s.CompletedSessions {
+		if s.CompletedSessions[i].DeletedAt == nil {
+			s.CompletedSessions[i].DeletedAt = &now
+		}
+	}
+	return nil
 }

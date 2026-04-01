@@ -28,8 +28,14 @@ var (
 	// ErrorText renders error messages in red.
 	ErrorText = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
 
+	// ConfirmPrompt renders confirmation prompts in yellow/bold.
+	ConfirmPrompt = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("3"))
+
 	// TableHeader is bold text for log table column headers.
 	TableHeader = lipgloss.NewStyle().Bold(true)
+
+	// SelectedRow highlights the currently selected row in the log table.
+	SelectedRow = lipgloss.NewStyle().Background(lipgloss.Color("8"))
 )
 
 // Separator returns a horizontal rule of the given width using the "─" character.

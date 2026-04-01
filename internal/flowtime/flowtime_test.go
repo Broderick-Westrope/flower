@@ -384,3 +384,253 @@ func TestFullCycle(t *testing.T) {
 		t.Error("expected no current break after stop")
 	}
 }
+
+func TestCancelSession(t *testing.T) {
+	t.Run("from flow clears session", func(t *testing.T) {
+		clock := newTestClock()
+		state := NewFlowState(clock)
+
+		_ = state.StartSession("write code")
+		clock.Advance(10 * time.Minute)
+
+		err := state.CancelSession()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if state.CurrentSession != nil {
+			t.Error("expected current session to be cleared")
+		}
+		if len(state.CompletedSessions) != 0 {
+			t.Errorf("completed sessions = %d, want 0", len(state.CompletedSessions))
+		}
+	})
+
+	t.Run("from break clears session and break", func(t *testing.T) {
+		clock := newTestClock()
+		state := NewFlowState(clock)
+
+		_ = state.StartSession("write code")
+		clock.Advance(20 * time.Minute)
+		_ = state.TakeBreak()
+
+		err := state.CancelSession()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if state.CurrentSession != nil {
+			t.Error("expected current session to be cleared")
+		}
+		if state.CurrentBreak != nil {
+			t.Error("expected current break to be cleared")
+		}
+	})
+
+	t.Run("errors when no session", func(t *testing.T) {
+		clock := newTestClock()
+		state := NewFlowState(clock)
+
+		err := state.CancelSession()
+		if err == nil {
+			t.Fatal("expected error when no session active")
+		}
+		if !errors.Is(err, ErrNoActiveSession) {
+			t.Errorf("error = %q, want %q", err.Error(), ErrNoActiveSession)
+		}
+	})
+}
+
+func TestActiveSessions(t *testing.T) {
+	t.Run("returns only non-deleted sessions", func(t *testing.T) {
+		clock := newTestClock()
+		state := NewFlowState(clock)
+
+		now := clock.Now()
+		state.CompletedSessions = []CompletedSession{
+			{Task: "task 1", FlowDuration: 10 * time.Minute, CompletedAt: now},
+			{Task: "task 2", FlowDuration: 20 * time.Minute, CompletedAt: now, DeletedAt: &now},
+			{Task: "task 3", FlowDuration: 30 * time.Minute, CompletedAt: now},
+		}
+
+		active := state.ActiveSessions()
+		if len(active) != 2 {
+			t.Fatalf("active sessions = %d, want 2", len(active))
+		}
+		if active[0].Task != "task 1" {
+			t.Errorf("active[0].Task = %q, want %q", active[0].Task, "task 1")
+		}
+		if active[1].Task != "task 3" {
+			t.Errorf("active[1].Task = %q, want %q", active[1].Task, "task 3")
+		}
+	})
+
+	t.Run("returns empty slice when all deleted", func(t *testing.T) {
+		clock := newTestClock()
+		state := NewFlowState(clock)
+
+		now := clock.Now()
+		state.CompletedSessions = []CompletedSession{
+			{Task: "task 1", FlowDuration: 10 * time.Minute, CompletedAt: now, DeletedAt: &now},
+		}
+
+		active := state.ActiveSessions()
+		if len(active) != 0 {
+			t.Fatalf("active sessions = %d, want 0", len(active))
+		}
+	})
+
+	t.Run("returns empty slice when no sessions", func(t *testing.T) {
+		clock := newTestClock()
+		state := NewFlowState(clock)
+
+		active := state.ActiveSessions()
+		if len(active) != 0 {
+			t.Fatalf("active sessions = %d, want 0", len(active))
+		}
+	})
+}
+
+func TestDeleteSession(t *testing.T) {
+	t.Run("soft-deletes session at index", func(t *testing.T) {
+		clock := newTestClock()
+		state := NewFlowState(clock)
+
+		state.CompletedSessions = []CompletedSession{
+			{Task: "task 1", FlowDuration: 10 * time.Minute, CompletedAt: clock.Now()},
+			{Task: "task 2", FlowDuration: 20 * time.Minute, CompletedAt: clock.Now()},
+		}
+
+		clock.Advance(time.Hour)
+
+		err := state.DeleteSession(0)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if state.CompletedSessions[0].DeletedAt == nil {
+			t.Fatal("expected DeletedAt to be set")
+		}
+		if !state.CompletedSessions[0].DeletedAt.Equal(clock.Now()) {
+			t.Errorf("DeletedAt = %v, want %v", state.CompletedSessions[0].DeletedAt, clock.Now())
+		}
+		// Second session should be untouched
+		if state.CompletedSessions[1].DeletedAt != nil {
+			t.Error("expected second session DeletedAt to be nil")
+		}
+	})
+
+	t.Run("errors on out-of-range index", func(t *testing.T) {
+		clock := newTestClock()
+		state := NewFlowState(clock)
+
+		err := state.DeleteSession(0)
+		if !errors.Is(err, ErrSessionNotFound) {
+			t.Errorf("error = %v, want %v", err, ErrSessionNotFound)
+		}
+
+		err = state.DeleteSession(-1)
+		if !errors.Is(err, ErrSessionNotFound) {
+			t.Errorf("error = %v, want %v", err, ErrSessionNotFound)
+		}
+	})
+
+	t.Run("errors on already-deleted session", func(t *testing.T) {
+		clock := newTestClock()
+		state := NewFlowState(clock)
+
+		now := clock.Now()
+		state.CompletedSessions = []CompletedSession{
+			{Task: "task 1", FlowDuration: 10 * time.Minute, CompletedAt: now, DeletedAt: &now},
+		}
+
+		err := state.DeleteSession(0)
+		if !errors.Is(err, ErrSessionDeleted) {
+			t.Errorf("error = %v, want %v", err, ErrSessionDeleted)
+		}
+	})
+}
+
+func TestDeleteAllSessions(t *testing.T) {
+	t.Run("soft-deletes all active sessions", func(t *testing.T) {
+		clock := newTestClock()
+		state := NewFlowState(clock)
+
+		now := clock.Now()
+		state.CompletedSessions = []CompletedSession{
+			{Task: "task 1", FlowDuration: 10 * time.Minute, CompletedAt: now},
+			{Task: "task 2", FlowDuration: 20 * time.Minute, CompletedAt: now, DeletedAt: &now},
+			{Task: "task 3", FlowDuration: 30 * time.Minute, CompletedAt: now},
+		}
+
+		clock.Advance(time.Hour)
+
+		err := state.DeleteAllSessions()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		for i, cs := range state.CompletedSessions {
+			if cs.DeletedAt == nil {
+				t.Errorf("session %d: expected DeletedAt to be set", i)
+			}
+		}
+
+		// Already-deleted session should keep its original DeletedAt
+		if !state.CompletedSessions[1].DeletedAt.Equal(now) {
+			t.Errorf("previously deleted session: DeletedAt = %v, want %v", state.CompletedSessions[1].DeletedAt, now)
+		}
+
+		// Newly deleted sessions should use current clock time
+		if !state.CompletedSessions[0].DeletedAt.Equal(clock.Now()) {
+			t.Errorf("session 0: DeletedAt = %v, want %v", state.CompletedSessions[0].DeletedAt, clock.Now())
+		}
+	})
+
+	t.Run("errors when no active sessions", func(t *testing.T) {
+		clock := newTestClock()
+		state := NewFlowState(clock)
+
+		err := state.DeleteAllSessions()
+		if !errors.Is(err, ErrNoSessionsToDelete) {
+			t.Errorf("error = %v, want %v", err, ErrNoSessionsToDelete)
+		}
+	})
+
+	t.Run("errors when all already deleted", func(t *testing.T) {
+		clock := newTestClock()
+		state := NewFlowState(clock)
+
+		now := clock.Now()
+		state.CompletedSessions = []CompletedSession{
+			{Task: "task 1", FlowDuration: 10 * time.Minute, CompletedAt: now, DeletedAt: &now},
+		}
+
+		err := state.DeleteAllSessions()
+		if !errors.Is(err, ErrNoSessionsToDelete) {
+			t.Errorf("error = %v, want %v", err, ErrNoSessionsToDelete)
+		}
+	})
+}
+
+func TestResumeSkipsDeletedSessions(t *testing.T) {
+	clock := newTestClock()
+	state := NewFlowState(clock)
+
+	now := clock.Now()
+	deletedAt := now
+	state.CompletedSessions = []CompletedSession{
+		{Task: "old task", FlowDuration: 10 * time.Minute, CompletedAt: now},
+		{Task: "deleted task", FlowDuration: 20 * time.Minute, CompletedAt: now, DeletedAt: &deletedAt},
+	}
+
+	clock.Advance(time.Hour)
+
+	resumed, err := state.Resume()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resumed {
+		t.Error("expected resumedCurrent = false")
+	}
+	if state.CurrentSession.Task != "old task" {
+		t.Errorf("task = %q, want %q", state.CurrentSession.Task, "old task")
+	}
+}

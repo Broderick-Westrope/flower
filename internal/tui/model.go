@@ -6,6 +6,7 @@ import (
 
 	"github.com/Broderick-Westrope/flower/internal/flowtime"
 	"github.com/Broderick-Westrope/flower/internal/storage"
+	"github.com/Broderick-Westrope/flower/internal/tui/msgs"
 	"github.com/Broderick-Westrope/flower/internal/tui/styles"
 	"github.com/Broderick-Westrope/flower/internal/tui/views"
 	tea "github.com/charmbracelet/bubbletea"
@@ -31,6 +32,10 @@ type Model struct {
 	flowView  *views.FlowView
 	breakView *views.BreakView
 	logView   *views.LogView
+
+	// Confirmation prompt state.
+	confirming    bool
+	confirmAction msgs.ConfirmAction
 
 	err         error
 	errDeadline time.Time
@@ -91,6 +96,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.String() == "ctrl+c" {
 			return m, tea.Quit
 		}
+		// When a confirmation prompt is active, only handle y/n/esc.
+		if m.confirming {
+			return m.handleConfirmKey(msg)
+		}
 		return m.handleKey(msg)
 
 	case tea.WindowSizeMsg:
@@ -114,6 +123,23 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case BackMsg:
 		return m.handleBack()
+
+	case RequestConfirmMsg:
+		m.confirming = true
+		m.confirmAction = msg.Action
+		return m, nil
+
+	case CancelSessionMsg:
+		return m.handleCancelSession()
+
+	case DeleteSessionMsg:
+		return m.handleDeleteSession(msg.Index)
+
+	case DeleteAllSessionsMsg:
+		return m.handleDeleteAllSessions()
+
+	case RequestDeleteSessionMsg:
+		return m.handleRequestDeleteSession(msg.ActiveIndex)
 	}
 
 	// Delegate spinner, progress frames, etc. to active view.
@@ -132,6 +158,14 @@ func (m *Model) View() string {
 		content = m.breakView.View()
 	case viewLog:
 		content = m.logView.View()
+	}
+
+	if m.confirming {
+		content = lipgloss.JoinVertical(lipgloss.Left,
+			content,
+			"",
+			styles.ConfirmPrompt.Render(m.confirmAction.Prompt+" [y/n]"),
+		)
 	}
 
 	if m.err != nil {
@@ -163,6 +197,8 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.handleTakeBreak()
 		case "s":
 			return m.handleStop()
+		case "c":
+			return m.requestConfirm("Cancel session?", CancelSessionMsg{})
 		case "l":
 			return m.handleShowLog()
 		case "q":
@@ -175,6 +211,8 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.handleResume()
 		case "s":
 			return m.handleStop()
+		case "c":
+			return m.requestConfirm("Cancel session?", CancelSessionMsg{})
 		case "l":
 			return m.handleShowLog()
 		case "q":
@@ -250,7 +288,7 @@ func (m *Model) handleStop() (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) handleShowLog() (tea.Model, tea.Cmd) {
-	m.logView.SetSessions(m.state.CompletedSessions)
+	m.logView.SetSessions(m.state.ActiveSessions())
 	m.activeView = viewLog
 	return m, nil
 }
@@ -281,6 +319,92 @@ func (m *Model) delegateToActiveView(msg tea.Msg) tea.Cmd {
 		return m.logView.Update(msg)
 	}
 	return nil
+}
+
+func (m *Model) requestConfirm(prompt string, onYes tea.Msg) (tea.Model, tea.Cmd) {
+	m.confirming = true
+	m.confirmAction = msgs.ConfirmAction{Prompt: prompt, OnYes: onYes}
+	return m, nil
+}
+
+func (m *Model) handleConfirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "y", "Y":
+		m.confirming = false
+		action := m.confirmAction.OnYes
+		m.confirmAction = msgs.ConfirmAction{}
+		return m.Update(action)
+	case "n", "N", "esc":
+		m.confirming = false
+		m.confirmAction = msgs.ConfirmAction{}
+		return m, nil
+	}
+	return m, nil
+}
+
+func (m *Model) handleCancelSession() (tea.Model, tea.Cmd) {
+	if err := m.state.CancelSession(); err != nil {
+		return m, errCmd(err)
+	}
+	if err := m.store.Save(m.state); err != nil {
+		return m, errCmd(fmt.Errorf("saving: %w", err))
+	}
+
+	m.activeView = viewIdle
+	m.idleView.Reset()
+	return m, m.idleView.Init()
+}
+
+func (m *Model) handleDeleteSession(index int) (tea.Model, tea.Cmd) {
+	if err := m.state.DeleteSession(index); err != nil {
+		return m, errCmd(err)
+	}
+	if err := m.store.Save(m.state); err != nil {
+		return m, errCmd(fmt.Errorf("saving: %w", err))
+	}
+
+	// Refresh the log view with updated active sessions.
+	m.logView.SetSessions(m.state.ActiveSessions())
+	return m, nil
+}
+
+func (m *Model) handleRequestDeleteSession(activeIndex int) (tea.Model, tea.Cmd) {
+	active := m.state.ActiveSessions()
+	if activeIndex < 0 || activeIndex >= len(active) {
+		return m, errCmd(fmt.Errorf("session index %d out of range", activeIndex))
+	}
+
+	target := active[activeIndex]
+
+	// Find the matching entry in the full slice.
+	fullIndex := -1
+	for i, cs := range m.state.CompletedSessions {
+		if cs.CompletedAt.Equal(target.CompletedAt) && cs.Task == target.Task && cs.DeletedAt == nil {
+			fullIndex = i
+			break
+		}
+	}
+	if fullIndex == -1 {
+		return m, errCmd(fmt.Errorf("session not found"))
+	}
+
+	return m.requestConfirm(
+		fmt.Sprintf("Delete %q?", target.Task),
+		DeleteSessionMsg{Index: fullIndex},
+	)
+}
+
+func (m *Model) handleDeleteAllSessions() (tea.Model, tea.Cmd) {
+	if err := m.state.DeleteAllSessions(); err != nil {
+		return m, errCmd(err)
+	}
+	if err := m.store.Save(m.state); err != nil {
+		return m, errCmd(fmt.Errorf("saving: %w", err))
+	}
+
+	// Refresh the log view with updated active sessions.
+	m.logView.SetSessions(m.state.ActiveSessions())
+	return m, nil
 }
 
 func errCmd(err error) tea.Cmd {
