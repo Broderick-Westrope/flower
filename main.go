@@ -4,52 +4,48 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Broderick-Westrope/flower/pkg/core"
-	"github.com/Broderick-Westrope/flower/pkg/tui"
+	"github.com/Broderick-Westrope/flower/internal/cli"
+	"github.com/Broderick-Westrope/flower/internal/flowtime"
+	"github.com/Broderick-Westrope/flower/internal/storage"
+	"github.com/Broderick-Westrope/flower/internal/tui"
 	"github.com/alecthomas/kong"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-type CLI struct {
-	Start  StartCmd  `cmd:"" help:"Start flow, creating a new session if needed."`
-	Break  BreakCmd  `cmd:"" help:"End flow, start break."`
-	Resume ResumeCmd `cmd:"" help:"End break, resume the current or previous session in a flow state."`
-	Stop   StopCmd   `cmd:"" help:"End current session."`
-	Status StatusCmd `cmd:"" help:"Show current state."`
-	Log    LogCmd    `cmd:"" help:"Show recent sessions."`
-	Locate LocateCmd `cmd:"" help:"Show the state file path."`
-}
-
 func main() {
-	// If no arguments provided, launch TUI directly
+	clock := flowtime.RealClock{}
+	jsonStore := storage.NewJSONStore(clock)
+
 	if len(os.Args) == 1 {
-		err := startTUI(nil)
-		if err != nil {
-			panic(err)
+		if err := runTUI(jsonStore); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
 		}
 		return
 	}
 
-	var cli CLI
-
-	ctx := kong.Parse(&cli,
+	ctx := &cli.Context{
+		Store:       jsonStore,
+		RunTUI:      runTUI,
+		LocateStore: jsonStore.GetFilePath,
+	}
+	var c cli.CLI
+	kongCtx := kong.Parse(&c,
 		kong.Name("flower"),
 		kong.Description("A minimal Flowtime Technique CLI tool"),
 	)
-
-	err := ctx.Run()
-	ctx.FatalIfErrorf(err)
+	err := kongCtx.Run(ctx)
+	kongCtx.FatalIfErrorf(err)
 }
 
-func startTUI(state *core.AppState) error {
-	m, err := tui.New(state)
+func runTUI(store storage.Store) error {
+	m, err := tui.New(store)
 	if err != nil {
-		return fmt.Errorf("creating new model: %w", err)
+		return fmt.Errorf("creating TUI model: %w", err)
 	}
-
 	_, err = tea.NewProgram(m).Run()
 	if err != nil {
-		return fmt.Errorf("running program: %w", err)
+		return fmt.Errorf("running TUI: %w", err)
 	}
 	return nil
 }

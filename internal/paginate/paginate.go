@@ -1,4 +1,4 @@
-package main
+package paginate
 
 // ReversePaginate returns elements from a slice in reverse chronological order.
 // Elements are assumed to be ordered from oldest to newest in the input slice.
