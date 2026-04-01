@@ -4,16 +4,14 @@ A minimal CLI & TUI tool for the Flowtime Technique - a productivity method simi
 
 ![TUI Demo](./assets/tui-demo.gif)
 
-## Features
+## How It Works
 
-- **Start flow sessions** with task tracking
-- **Take breaks** with suggested durations based on work time
-- **Resume work** from breaks or previous sessions
-- **Cancel sessions** without recording them
-- **Soft-delete** individual or all completed sessions
-- **View current status** and paginated session history
-- **Interactive TUI** with keyboard shortcuts or command-line interface
-- **Persistent state** saved as JSON
+1. **Start** a flow session by stating the task you're going to focus on.
+2. Take a **Break** when you feel ready. Flower will suggest a break duration based on how long you worked.
+3. Then **Resume** the same task, **Start** a new task, or **Stop** the session.
+4. You can always **Cancel** a session if you made a mistake with the task description or don't want to track it.
+
+All sessions are automatically tracked locally and can be viewed with `flower log`. Deleted sessions are soft-deleted (data is retained but hidden from display) so you can still access data after accidental deletion.
 
 ## Installation
 
@@ -107,16 +105,6 @@ flower cancel -y
 flower delete 1 -y
 flower clear -y
 ```
-
-## How It Works
-
-1. **Start** a flow session with a task description
-2. Work until you naturally feel ready for a break
-3. **Break** - the tool suggests a break duration based on how long you worked
-4. **Resume** when ready to continue
-5. **Stop** to end the session, or **Cancel** to discard it
-
-All sessions are automatically tracked and can be viewed with `flower log`. Deleted sessions are soft-deleted (data is retained but hidden from display).
 
 ## License
 
