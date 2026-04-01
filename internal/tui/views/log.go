@@ -72,16 +72,23 @@ func (v *LogView) View() string {
 	title := styles.Title.Render("Session Log")
 
 	if len(v.sessions) == 0 {
+		emptyMsg := "No completed sessions yet."
+		helpBar := RenderHelpBar([]KeyBinding{
+			{Key: "esc", Description: "back"},
+			{Key: "q", Description: "quit"},
+		})
+		contentWidth := max(
+			lipgloss.Width(title),
+			lipgloss.Width(emptyMsg),
+			lipgloss.Width(helpBar),
+		)
 		return lipgloss.JoinVertical(lipgloss.Left,
 			title,
 			"",
-			"No completed sessions yet.",
+			emptyMsg,
 			"",
-			styles.Separator(20),
-			RenderHelpBar([]KeyBinding{
-				{Key: "esc", Description: "back"},
-				{Key: "q", Description: "quit"},
-			}),
+			styles.Separator(contentWidth),
+			helpBar,
 		)
 	}
 
@@ -113,20 +120,28 @@ func (v *LogView) View() string {
 		})
 
 	pageInfo := fmt.Sprintf("Page %d of %d", v.page, v.totalPages())
+	tableRendered := t.Render()
+	helpBar := RenderHelpBar([]KeyBinding{
+		{Key: "esc", Description: "back"},
+		{Key: "↑", Description: "newer"},
+		{Key: "↓", Description: "older"},
+		{Key: "q", Description: "quit"},
+	})
+
+	contentWidth := max(
+		lipgloss.Width(title),
+		lipgloss.Width(tableRendered),
+		lipgloss.Width(helpBar),
+	)
 
 	return lipgloss.JoinVertical(lipgloss.Left,
 		title,
 		"",
-		t.Render(),
+		tableRendered,
 		"",
 		pageInfo,
 		"",
-		styles.Separator(20),
-		RenderHelpBar([]KeyBinding{
-			{Key: "esc", Description: "back"},
-			{Key: "↑", Description: "newer"},
-			{Key: "↓", Description: "older"},
-			{Key: "q", Description: "quit"},
-		}),
+		styles.Separator(contentWidth),
+		helpBar,
 	)
 }

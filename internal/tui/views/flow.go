@@ -48,19 +48,27 @@ func (v *FlowView) View() string {
 
 	elapsed := time.Since(v.session.StartTime)
 	timerLine := styles.Timer.Render(flowtime.FormatDuration(elapsed)) + " " + v.spinner.View()
+	taskLine := styles.TaskName.Render(v.session.Task)
+	helpBar := RenderHelpBar([]KeyBinding{
+		{Key: "space", Description: "break"},
+		{Key: "s", Description: "stop"},
+		{Key: "l", Description: "log"},
+		{Key: "q", Description: "quit"},
+	})
+
+	contentWidth := max(
+		lipgloss.Width(timerLine),
+		lipgloss.Width(taskLine),
+		lipgloss.Width(helpBar),
+	)
 
 	return lipgloss.JoinVertical(lipgloss.Left,
 		styles.Title.Render("Flowing"),
 		"",
-		styles.TaskName.Render(v.session.Task),
+		taskLine,
 		timerLine,
 		"",
-		styles.Separator(20),
-		RenderHelpBar([]KeyBinding{
-			{Key: "space", Description: "break"},
-			{Key: "s", Description: "stop"},
-			{Key: "l", Description: "log"},
-			{Key: "q", Description: "quit"},
-		}),
+		styles.Separator(contentWidth),
+		helpBar,
 	)
 }

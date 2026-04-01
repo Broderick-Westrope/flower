@@ -79,20 +79,30 @@ func (v *BreakView) View() string {
 
 	timerLine := styles.Timer.Render(fmt.Sprintf("%s / %s", elapsedStr, suggestedStr)) +
 		"  " + statusStr
+	taskLine := styles.TaskName.Render(v.taskName)
+	progressLine := v.progress.View()
+	helpBar := RenderHelpBar([]KeyBinding{
+		{Key: "space", Description: "resume"},
+		{Key: "s", Description: "stop"},
+		{Key: "l", Description: "log"},
+		{Key: "q", Description: "quit"},
+	})
+
+	contentWidth := max(
+		lipgloss.Width(timerLine),
+		lipgloss.Width(taskLine),
+		lipgloss.Width(progressLine),
+		lipgloss.Width(helpBar),
+	)
 
 	return lipgloss.JoinVertical(lipgloss.Left,
 		styles.Title.Render("Break"),
 		"",
-		styles.TaskName.Render(v.taskName),
+		taskLine,
 		timerLine,
-		v.progress.View(),
+		progressLine,
 		"",
-		styles.Separator(20),
-		RenderHelpBar([]KeyBinding{
-			{Key: "space", Description: "resume"},
-			{Key: "s", Description: "stop"},
-			{Key: "l", Description: "log"},
-			{Key: "q", Description: "quit"},
-		}),
+		styles.Separator(contentWidth),
+		helpBar,
 	)
 }
